@@ -1,0 +1,149 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  email              String              @unique
+  name               String?
+  role               String              @default("USER") // "USER" or "ADMIN"
+  createdAt          DateTime            @default(now())
+  wallet             Wallet?
+  merchant           Merchant?
+  p2pOrders          P2POrder[]         @relation("UserOrders")
+  auditLogs          AuditLog[]
+  depositRequests    DepositRequest[]
+  withdrawalRequests WithdrawalRequest[]
+  transactions       Transaction[]
+}
+
+model Wallet {
+  id          String @id @default(cuid())
+  userId      String @unique
+  user        User   @relation(fields: [userId], references: [id])
+  balance     Float  @default(0) // Balance in USDT
+}
+
+enum P2PType {
+  BUY
+  SELL
+}
+
+enum P2PStatus {
+  PENDING
+  PAID
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum MerchantStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Merchant {
+  id           String         @id @default(cuid())
+  userId       String         @unique
+  user         User           @relation(fields: [userId], references: [id])
+  status       MerchantStatus @default(PENDING)
+  businessName String
+  phoneNumber  String
+  bio          String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  ads          P2PAd[]
+  p2pOrders    P2POrder[]
+}
+
+model P2PAd {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id])
+  type       P2PType
+  amount     Float    // Current available USDT in this ad
+  minLimit   Float    // Min ETB per trade
+  maxLimit   Float    // Max ETB per trade
+  price      Float    // ETB/USDT rate
+  status     String   @default("ACTIVE")
+  createdAt  DateTime @default(now())
+  orders     P2POrder[]
+}
+
+model P2POrder {
+  id             String    @id @default(cuid())
+  adId           String
+  ad             P2PAd     @relation(fields: [adId], references: [id])
+  creatorId      String    // The person responding to the ad
+  creator        User      @relation("UserOrders", fields: [creatorId], references: [id])
+  merchantId     String
+  merchant       Merchant  @relation(fields: [merchantId], references: [id])
+  type           P2PType
+  amountUsdt     Float
+  amountEtb      Float
+  status         P2PStatus @default(PENDING)
+  paymentProof   String?   
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  details   String?  // JSON string
+  createdAt DateTime @default(now())
+}
+
+model GlobalSetting {
+  id        String   @id @default("singleton")
+  buyRate   Float    @default(120) // ETB to buy 1 USDT
+  sellRate  Float    @default(115) // ETB user gets per 1 USDT sold
+  updatedAt DateTime @default(now())
+}
+
+model DepositRequest {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id])
+  amount        Float
+  network       String    @default("TRC20")
+  txHash        String    @unique
+  proofImageUrl String?
+  status        String    @default("pending") // "pending", "verified", "rejected"
+  createdAt     DateTime  @default(now())
+  verifiedAt    DateTime?
+}
+
+model WithdrawalRequest {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+  amountEtb   Float
+  destination String
+  status      String    @default("pending") // "pending", "paid", "rejected"
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  type        String   // "deposit", "withdrawal"
+  currency    String   // "ETB", "USDT"
+  amount      Float
+  status      String
+  referenceId String?  // ID of the DepositRequest or WithdrawalRequest
+  createdAt   DateTime @default(now())
+}
