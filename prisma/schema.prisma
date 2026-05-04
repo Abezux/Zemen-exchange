@@ -91,7 +91,9 @@ model P2POrder {
   amountUsdt     Float
   amountEtb      Float
   status         P2PStatus @default(PENDING)
+  paymentMethod  String?   
   paymentProof   String?   
+  disputeReason  String?
   createdAt      DateTime  @default(now())
   completedAt    DateTime?
 }
