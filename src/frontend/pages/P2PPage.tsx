@@ -27,6 +27,7 @@ interface Ad {
   id: string;
   type: 'BUY' | 'SELL';
   amount: number;
+  remainingAmount: number;
   minLimit: number;
   maxLimit: number;
   price: number;
@@ -184,10 +185,13 @@ export const P2PPage = () => {
   const handleCreateOrder = async () => {
     if (!showTradeModal || !tradeAmount.usdt) return;
     try {
+      // Use Trade Ad ID + Timestamp for idempotency
+      const idempotencyKey = `order-${showTradeModal.id}-${Date.now()}`;
       await axios.post('/api/p2p/orders', {
         adId: showTradeModal.id,
         amountUsdt: parseFloat(tradeAmount.usdt),
-        paymentMethod: selectedPayment
+        paymentMethod: selectedPayment,
+        idempotencyKey
       });
       setShowTradeModal(null);
       setTradeAmount({ usdt: '', etb: '' });
@@ -355,7 +359,7 @@ export const P2PPage = () => {
                            </div>
                            <div>
                              <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Available</p>
-                             <h5 className="text-sm font-black text-zinc-300 italic tracking-tight">{ad.amount.toFixed(2)} USDT</h5>
+                             <h5 className="text-sm font-black text-zinc-300 italic tracking-tight">{ad.remainingAmount.toFixed(2)} USDT</h5>
                              <p className="text-[10px] text-zinc-500 font-mono italic">Limits: {ad.minLimit}-{ad.maxLimit} ETB</p>
                            </div>
                            <div className="col-span-2 lg:col-span-1 flex items-center">
@@ -600,8 +604,12 @@ export const P2PPage = () => {
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {myAds.map(ad => (
                 <div key={ad.id} className="bg-black/40 border border-zinc-800 p-4 rounded-2xl">
-                   <p className="text-[10px] font-black text-zinc-500 uppercase italic mb-2 tracking-widest">{ad.type} AD</p>
-                   <p className="text-white font-black italic">{ad.amount.toFixed(2)} USDT @ {ad.price} ETB</p>
+                   <div className="flex justify-between items-start mb-2">
+                      <p className="text-[10px] font-black text-zinc-500 uppercase italic tracking-widest">{ad.type} AD</p>
+                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${ad.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{ad.status}</span>
+                   </div>
+                   <p className="text-white font-black italic">{ad.remainingAmount.toFixed(2)} / {ad.amount.toFixed(2)} USDT</p>
+                   <p className="text-zinc-500 text-[10px] font-medium mt-1">Rate: {ad.price} ETB</p>
                 </div>
               ))}
            </div>
