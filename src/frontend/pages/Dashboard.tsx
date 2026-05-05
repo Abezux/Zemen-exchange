@@ -81,13 +81,20 @@ export const Dashboard = () => {
           className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] relative overflow-hidden group shadow-xl"
         >
           <div className="flex justify-between items-start mb-8">
-             <div>
-               <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1">Your Portfolio</p>
-               <h3 className="text-4xl font-black text-white italic tracking-tighter">
-                 ${user?.wallet?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-               </h3>
-               <p className="text-zinc-400 text-xs mt-1 font-mono">Main Balance (USDT)</p>
-             </div>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1 italic">Available Balance</p>
+                  <h3 className="text-4xl font-black text-white italic tracking-tighter leading-none">
+                    ${user?.wallet?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </h3>
+                </div>
+                {user?.wallet?.lockedBalance ? (
+                  <div className="bg-orange-500/5 border border-orange-500/20 p-3 rounded-2xl flex items-center justify-between">
+                    <span className="text-[10px] font-black text-orange-500 uppercase italic tracking-widest">In Escrow / Locked</span>
+                    <span className="text-white font-black italic tracking-tight">${user.wallet.lockedBalance.toFixed(2)}</span>
+                  </div>
+                ) : null}
+              </div>
              <div className="bg-emerald-500/10 p-3 rounded-2xl">
                <TrendingUp className="w-6 h-6 text-emerald-500" />
              </div>

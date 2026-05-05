@@ -10,6 +10,7 @@ interface User {
   role: string;
   wallet?: {
     balance: number;
+    lockedBalance: number;
   };
   settings?: {
     buyRate: number;
