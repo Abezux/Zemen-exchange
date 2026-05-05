@@ -26,10 +26,20 @@ model User {
 }
 
 model Wallet {
-  id          String @id @default(cuid())
-  userId      String @unique
-  user        User   @relation(fields: [userId], references: [id])
-  balance     Float  @default(0) // Balance in USDT
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  balance         Float    @default(0) // Available USDT balance
+  lockedBalance   Float    @default(0) // USDT held in escrow or active SELL ads
+  currency        String   @default("USDT")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+enum AdStatus {
+  ACTIVE
+  INACTIVE
+  DELETED
 }
 
 enum P2PType {
@@ -66,17 +76,19 @@ model Merchant {
 }
 
 model P2PAd {
-  id         String   @id @default(cuid())
-  merchantId String
-  merchant   Merchant @relation(fields: [merchantId], references: [id])
-  type       P2PType
-  amount     Float    // Current available USDT in this ad
-  minLimit   Float    // Min ETB per trade
-  maxLimit   Float    // Max ETB per trade
-  price      Float    // ETB/USDT rate
-  status     String   @default("ACTIVE")
-  createdAt  DateTime @default(now())
-  orders     P2POrder[]
+  id              String     @id @default(cuid())
+  merchantId      String
+  merchant        Merchant   @relation(fields: [merchantId], references: [id])
+  type            P2PType
+  amount          Float      // Original total amount posted
+  remainingAmount Float      // Currently available liquidity for orders
+  minLimit        Float      // Min ETB per trade
+  maxLimit        Float      // Max ETB per trade
+  price           Float      // ETB/USDT rate
+  status          AdStatus   @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  orders          P2POrder[]
 }
 
 model P2POrder {
@@ -94,6 +106,7 @@ model P2POrder {
   paymentMethod  String?   
   paymentProof   String?   
   disputeReason  String?
+  idempotencyKey String?   @unique
   createdAt      DateTime  @default(now())
   completedAt    DateTime?
 }

@@ -1,3 +1,7 @@
+/**
+ * P2P Trading System with Atomic Consistency and Escrow Safety
+ */
+
 import express, { Response } from "express";
 import { AuthRequest, authenticate } from "../middleware/auth";
 import prisma from "../lib/prisma";
@@ -19,146 +23,105 @@ async function logAction(userId: string, action: string, details?: any) {
   }
 }
 
-// 1. Merchant Application
+/**
+ * 1. Merchant Application (Standard Check)
+ */
 router.post("/merchant/apply", authenticate, async (req: AuthRequest, res: Response) => {
   const { businessName, phoneNumber, bio } = req.body;
-  
-  if (!req.user?.id) {
-    return res.status(401).json({ error: "User authentication missing from request" });
-  }
+  if (!req.user?.id) return res.status(401).json({ error: "Auth missing" });
 
   try {
-    // Check if user already has a merchant record
-    const existingMerchant = await prisma.merchant.findUnique({
-      where: { userId: req.user.id }
-    });
-
+    const existingMerchant = await prisma.merchant.findUnique({ where: { userId: req.user.id } });
     if (existingMerchant) {
-      if (existingMerchant.status === "PENDING") {
-        return res.status(400).json({ error: "You already have a pending application." });
-      }
-      if (existingMerchant.status === "APPROVED") {
-        return res.status(400).json({ error: "You are already an approved merchant." });
-      }
+      if (existingMerchant.status === "PENDING") return res.status(400).json({ error: "Pending application exists." });
+      if (existingMerchant.status === "APPROVED") return res.status(400).json({ error: "Already approved." });
 
       const updated = await prisma.merchant.update({
         where: { id: existingMerchant.id },
-        data: {
-          businessName,
-          phoneNumber,
-          bio,
-          status: "PENDING"
-        }
+        data: { businessName, phoneNumber, bio, status: "PENDING" }
       });
-      await logAction(req.user.id, "MERCHANT_RE_APPLICATION_SUBMITTED", { businessName });
       return res.json(updated);
     }
 
     const merchant = await prisma.merchant.create({
-      data: {
-        userId: req.user.id,
-        businessName,
-        phoneNumber,
-        bio: bio || "",
-        status: "PENDING"
-      }
+      data: { userId: req.user.id, businessName, phoneNumber, bio: bio || "", status: "PENDING" }
     });
-    await logAction(req.user.id, "MERCHANT_APPLICATION_SUBMITTED", { businessName });
     res.json(merchant);
-  } catch (error: any) {
-    console.error("Merchant application error:", error);
-    res.status(500).json({ error: "Failed to apply. Database error or missing fields." });
+  } catch (error) {
+    res.status(500).json({ error: "Application failed" });
   }
 });
 
-// 2. Get active ads
-router.get("/ads", async (req: AuthRequest, res: Response) => {
+/**
+ * 2. Marketplace & Liquidity Retrieval
+ */
+router.get("/ads", async (req, res) => {
   try {
     const ads = await prisma.p2PAd.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", remainingAmount: { gt: 0 } },
       include: { merchant: { include: { user: true } } }
     });
     res.json(ads);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch ads" });
+    res.status(500).json({ error: "Fetch failed" });
   }
 });
 
-// 2.5 Get My Ads (Merchant Only)
 router.get("/my-ads", authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const merchant = await prisma.merchant.findUnique({
-      where: { userId: req.user!.id }
-    });
+    const merchant = await prisma.merchant.findUnique({ where: { userId: req.user!.id } });
     if (!merchant) return res.status(404).json({ error: "Merchant not found" });
-
     const ads = await prisma.p2PAd.findMany({
-      where: { merchantId: merchant.id },
+      where: { merchantId: merchant.id, NOT: { status: "DELETED" } },
       orderBy: { createdAt: "desc" }
     });
     res.json(ads);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch your ads" });
+    res.status(500).json({ error: "Fetch failed" });
   }
 });
 
-// 3. Create Ad (Merchant Only)
+/**
+ * 3. Atomic Ad Creation (SELL ads lock funds immediately)
+ */
 router.post("/ads", authenticate, async (req: AuthRequest, res: Response) => {
   const { type, amount, minLimit, maxLimit, price } = req.body;
-  const numAmount = parseFloat(amount);
+  const userId = req.user!.id;
+  const numAmount = Math.max(0, parseFloat(amount));
   const numPrice = parseFloat(price);
-  const numMinLimit = parseFloat(minLimit);
-  const numMaxLimit = parseFloat(maxLimit);
 
   try {
     const merchant = await prisma.merchant.findUnique({
-      where: { userId: req.user!.id },
+      where: { userId },
       include: { user: { include: { wallet: true } } }
     });
 
-    if (!merchant || merchant.status !== "APPROVED") {
-      return res.status(403).json({ error: "Only approved merchants can post ads" });
-    }
+    if (!merchant || merchant.status !== "APPROVED") return res.status(403).json({ error: "Unapproved merchant" });
 
-    // 1. Balance Constraint (Only for SELL ads, as merchant is selling their USDT)
-    if (type === "SELL") {
-      const wallet = merchant.user.wallet;
-      if (!wallet || wallet.balance < numAmount) {
-        return res.status(400).json({ error: `Insufficient wallet balance. You have ${wallet?.balance || 0} USDT.` });
-      }
-    }
-
-    // 2. Rate Constraint
+    // Enforce Rate Limits (Admin + 0-3% range)
     const settings = await prisma.globalSetting.findUnique({ where: { id: "singleton" } });
     if (settings) {
       const adminRate = type === "SELL" ? settings.sellRate : settings.buyRate;
-      const minAllowedRate = adminRate * 0.97;
-      if (numPrice > adminRate || numPrice < minAllowedRate) {
-        return res.status(400).json({ 
-          error: `Price out of range. Must be between ${minAllowedRate.toFixed(2)} and ${adminRate.toFixed(2)} ETB.` 
-        });
+      if (numPrice > adminRate || numPrice < adminRate * 0.97) {
+        return res.status(400).json({ error: `Price must be between ${(adminRate * 0.97).toFixed(2)} and ${adminRate.toFixed(2)}` });
       }
     }
 
-    // 3. Min/Max Order Logic
-    const maxOrderCalculated = numAmount * numPrice;
-    if (numMinLimit < 500) {
-      return res.status(400).json({ error: "Minimum order must be at least 500 ETB." });
-    }
-    if (numMinLimit >= maxOrderCalculated) {
-      return res.status(400).json({ error: `Minimum limit (${numMinLimit}) cannot exceed maximum total value (${maxOrderCalculated.toFixed(2)} ETB).` });
-    }
-    if (numMaxLimit > maxOrderCalculated) {
-      return res.status(400).json({ error: `Maximum limit cannot exceed total value (${maxOrderCalculated.toFixed(2)} ETB).` });
-    }
-
     const result = await prisma.$transaction(async (tx) => {
-      // Lock balance for SELL ads immediately
       if (type === "SELL") {
-        await tx.wallet.update({
-          where: { userId: req.user!.id },
-          data: { balance: { decrement: numAmount } }
+        // Atomic balance lock using balance as the predicate to prevent negative balance
+        const updatedWallet = await tx.wallet.update({
+           where: { userId },
+           data: {
+             balance: { decrement: numAmount },
+             lockedBalance: { increment: numAmount }
+           }
         });
+        
+        // Manual check for SQLite since it doesn't always throw on negative if not constrained
+        if (updatedWallet.balance < 0) {
+          throw new Error("Insufficient available balance.");
+        }
       }
 
       return await tx.p2PAd.create({
@@ -166,278 +129,217 @@ router.post("/ads", authenticate, async (req: AuthRequest, res: Response) => {
           merchantId: merchant.id,
           type,
           amount: numAmount,
-          minLimit: numMinLimit,
-          maxLimit: numMaxLimit,
+          remainingAmount: numAmount,
+          minLimit: parseFloat(minLimit),
+          maxLimit: parseFloat(maxLimit),
           price: numPrice
         }
       });
     });
 
-    await logAction(req.user!.id, "P2P_AD_CREATED", { adId: result.id, type, amount: numAmount });
+    await logAction(userId, "P2P_AD_CREATED", { adId: result.id, type, amount: numAmount });
     res.json(result);
   } catch (error: any) {
-    console.error("Ad creation error:", error);
-    res.status(500).json({ error: error.message || "Failed to create ad" });
+    res.status(400).json({ error: error.message });
   }
 });
 
-// 4. Create Order (Response to Ad)
+/**
+ * 4. Atomic Order Creation (Liquidity Locking & Escrow)
+ */
 router.post("/orders", authenticate, async (req: AuthRequest, res: Response) => {
-  const { adId, amountUsdt, paymentMethod } = req.body;
+  const { adId, amountUsdt, paymentMethod, idempotencyKey } = req.body;
   const buyerId = req.user!.id;
-  const numAmountUsdt = parseFloat(amountUsdt);
+  const qty = Math.max(0, parseFloat(amountUsdt));
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      const ad = await tx.p2PAd.findUnique({
-        where: { id: adId },
-        include: { merchant: true }
-      });
+      // 1. Precise Liquidity Lock
+      const ad = await tx.p2PAd.findUnique({ where: { id: adId }, include: { merchant: true } });
+      if (!ad || ad.status !== "ACTIVE") throw new Error("Ad inactive.");
+      if (ad.remainingAmount < qty) throw new Error("Insufficient ad liquidity.");
 
-      if (!ad || ad.status !== "ACTIVE") throw new Error("Ad not found or inactive");
-      
-      const amountEtb = numAmountUsdt * ad.price;
+      const fiatAmount = qty * ad.price;
+      if (fiatAmount < ad.minLimit || fiatAmount > ad.maxLimit) throw new Error("Trade limits violated.");
 
-      // Validation check for order limits
-      if (amountEtb < ad.minLimit || amountEtb > ad.maxLimit) {
-        throw new Error(`Amount must be between ${ad.minLimit} and ${ad.maxLimit} ETB`);
+      // Check for idempotency if provided
+      if (idempotencyKey) {
+        const existing = await tx.p2POrder.findUnique({ where: { idempotencyKey } });
+        if (existing) return existing;
       }
-      
-      if (ad.amount < numAmountUsdt) throw new Error("Insufficient amount remaining in this ad");
 
-      // Escrow Logic:
-      // If Ad type SELL (Merchant selling), Merchant balance was ALREADY locked during Ad creation.
-      // We just need to make sure we don't lock it again from wallet, 
-      // but the order still needs to be "escrowed" in the sense that it's taken from the Ad pool.
-      
-      // If user is SELLING (Ad type BUY), they must have sufficient balance
+      // 2. Escrow Management
       if (ad.type === "BUY") {
-        const wallet = await tx.wallet.findUnique({ where: { userId: buyerId } });
-        if (!wallet || wallet.balance < numAmountUsdt) throw new Error("Insufficient balance to sell");
-        
-        // Lock balance (Escrow) from User
-        await tx.wallet.update({
+        // Merchant is buying, Creator is selling. Lock creator's funds.
+        const updatedWallet = await tx.wallet.update({
           where: { userId: buyerId },
-          data: { balance: { decrement: numAmountUsdt } }
+          data: { balance: { decrement: qty }, lockedBalance: { increment: qty } }
         });
-      } else {
-        // Ad type SELL means merchant is selling.
-        // Funds were already locked during Ad creation.
-        // Nothing to decrement here from wallet, just verify ad amount (done above).
+        if (updatedWallet.balance < 0) throw new Error("Insufficient balance.");
       }
 
-      const order = await tx.p2POrder.create({
-        data: {
-          adId,
-          creatorId: buyerId,
-          merchantId: ad.merchantId,
-          type: ad.type,
-          amountUsdt: numAmountUsdt,
-          amountEtb,
-          status: "PENDING",
-          paymentMethod
-        }
-      });
-
-      // Reduce ad amount available
+      // Update Ad remaining liquidity
       await tx.p2PAd.update({
         where: { id: adId },
-        data: { amount: { decrement: numAmountUsdt } }
+        data: { remainingAmount: { decrement: qty } }
       });
 
-      return order;
+      return await tx.p2POrder.create({
+        data: {
+          adId, creatorId: buyerId, merchantId: ad.merchantId, type: ad.type,
+          amountUsdt: qty, amountEtb: fiatAmount, status: "PENDING",
+          paymentMethod, idempotencyKey
+        },
+        include: { merchant: { include: { user: true } } }
+      });
     });
 
-    await logAction(req.user!.id, "P2P_ORDER_CREATED", { orderId: result.id });
+    await logAction(buyerId, "P2P_ORDER_CREATED", { orderId: result.id });
     res.json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message || "Failed to create order" });
+    res.status(400).json({ error: error.message });
   }
 });
 
-// 5. Get My Orders
-router.get("/orders", authenticate, async (req: AuthRequest, res: Response) => {
+/**
+ * 5. Order State Management
+ */
+router.get("/orders", authenticate, async (req: AuthRequest, res) => {
   try {
     const orders = await prisma.p2POrder.findMany({
-      where: {
-        OR: [
-          { creatorId: req.user!.id },
-          { merchant: { userId: req.user!.id } }
-        ]
-      },
-      include: { 
-        ad: true, 
-        creator: true,
-        merchant: { include: { user: true } }
-      },
+      where: { OR: [{ creatorId: req.user!.id }, { merchant: { userId: req.user!.id } }] },
+      include: { ad: true, creator: true, merchant: { include: { user: true } } },
       orderBy: { createdAt: "desc" }
     });
     res.json(orders);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch orders" });
+    res.status(500).json({ error: "Fetch failed" });
   }
 });
 
-// 6. Mark Order as Paid
-router.post("/orders/:id/paid", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/paid", authenticate, async (req: AuthRequest, res) => {
   const { id } = req.params;
   const { paymentProof } = req.body;
   const userId = req.user!.id;
 
   try {
-    const order = await prisma.p2POrder.findUnique({
-      where: { id },
-      include: { merchant: true }
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.p2POrder.findUnique({ where: { id }, include: { merchant: true } });
+      if (!order) throw new Error("Order not found");
+      if (order.status !== "PENDING") throw new Error("Status mismatch.");
+
+      const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchant.userId === userId);
+      if (!isBuyer) throw new Error("Unauthorized.");
+
+      // Atomic state change check
+      const update = await tx.p2POrder.updateMany({
+        where: { id, status: "PENDING" },
+        data: { status: "PAID", paymentProof }
+      });
+      if (update.count === 0) throw new Error("Order status mismatch (must be PENDING).");
     });
-
-    if (!order) return res.status(404).json({ error: "Order not found" });
-    if (order.status !== "PENDING") return res.status(400).json({ error: "Order must be in PENDING status to mark as paid" });
-    
-    // Role Check: Only the payer can mark as paid.
-    // If order type is SELL, the creator (Buyer) pays.
-    // If order type is BUY, the merchant (Buyer) pays.
-    const isPayer = (order.type === "SELL" && order.creatorId === userId) || 
-                    (order.type === "BUY" && order.merchant.userId === userId);
-
-    if (!isPayer) {
-      return res.status(403).json({ error: "Only the payer can mark this order as paid." });
-    }
-
-    await prisma.p2POrder.update({
-      where: { id },
-      data: { 
-        status: "PAID",
-        paymentProof: paymentProof || null
-      }
-    });
-
-    await logAction(userId, "P2P_ORDER_MARKED_PAID", { orderId: id });
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to update order" });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
 });
 
-// 6.5 Cancel Order
-router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/release", authenticate, async (req: AuthRequest, res) => {
   const { id } = req.params;
   const userId = req.user!.id;
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const order = await tx.p2POrder.findUnique({
-        where: { id },
-        include: { merchant: { include: { user: true } }, ad: true }
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.p2POrder.findUnique({ 
+        where: { id }, 
+        include: { merchant: { include: { user: true } } } 
+      });
+      if (!order || order.status !== "PAID") throw new Error("Release unavailable.");
+
+      const isSeller = (order.type === "SELL" && order.merchant.userId === userId) || (order.type === "BUY" && order.creatorId === userId);
+      if (!isSeller) throw new Error("Unauthorized.");
+
+      // 1. Atomic state switch from PAID to COMPLETED
+      const update = await tx.p2POrder.updateMany({
+        where: { id, status: "PAID" },
+        data: { status: "COMPLETED", completedAt: new Date() }
+      });
+      if (update.count === 0) throw new Error("Order status mismatch (must be PAID).");
+
+      const payerId = order.type === "SELL" ? order.merchant.userId : order.creatorId;
+      const payeeId = order.type === "SELL" ? order.creatorId : order.merchant.userId;
+
+      await tx.wallet.update({
+        where: { userId: payerId },
+        data: { lockedBalance: { decrement: order.amountUsdt } }
       });
 
-      if (!order) throw new Error("Order not found");
-      if (order.status !== "PENDING") throw new Error("Only pending orders can be cancelled");
-      
-      // Verification: Only the creator (user) or merchant can cancel?
-      // User requirement says: "Cancel Order (only if no payment was sent)"
-      // This implies the buyer (the one who needs to pay) can cancel.
-      
-      // Return escrowed funds
-      const sellerUserId = order.type === "SELL" ? order.merchant.userId : order.creatorId;
-      
       await tx.wallet.update({
-        where: { userId: sellerUserId },
+        where: { userId: payeeId },
         data: { balance: { increment: order.amountUsdt } }
       });
-
-      // Update Order
-      await tx.p2POrder.update({
-        where: { id },
-        data: { status: "CANCELLED" }
-      });
-
-      // Return amount to Ad pool
-      await tx.p2PAd.update({
-        where: { id: order.adId },
-        data: { amount: { increment: order.amountUsdt } }
-      });
-
-      return { success: true };
     });
-
-    await logAction(userId, "P2P_ORDER_CANCELLED", { orderId: id });
-    res.json(result);
+    res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: error.message || "Failed to cancel order" });
+    res.status(400).json({ error: error.message });
   }
 });
 
-// 7. Merchant/User Releases USDT (Confirmation of ETB receipt)
-router.post("/orders/:id/release", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res) => {
   const { id } = req.params;
+  const userId = req.user!.id;
+
   try {
-    const order = await prisma.p2POrder.findUnique({
-      where: { id },
-      include: { ad: true, creator: true, merchant: true }
-    });
-
-    if (!order || order.status !== "PAID") {
-      return res.status(400).json({ error: "Order must be marked as PAID first" });
-    }
-    
     await prisma.$transaction(async (tx) => {
-      // 1. Mark order as completed
-      await tx.p2POrder.update({
-        where: { id },
-        data: { status: "COMPLETED", completedAt: new Date() }
+      const order = await tx.p2POrder.findUnique({ 
+        where: { id }, 
+        include: { merchant: { include: { user: true } } } 
       });
+      if (!order || order.status !== "PENDING") throw new Error("Cancellation barred.");
 
-      // 2. Handle Funds Transfer
-      if (order.type === "SELL") { 
-        // Ad type SELL means merchant sold, user bought.
-        // Funds should go from Merchant to User.
-        // (Merchant's ad amount was already reduced, but we need to update user balance)
+      const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchant.userId === userId);
+      const isSeller = (order.type === "SELL" && order.merchant.userId === userId) || (order.type === "BUY" && order.creatorId === userId);
+
+      if (!isBuyer && !isSeller) throw new Error("Unauthorized.");
+
+      // Atomic switch from PENDING to CANCELLED
+      const update = await tx.p2POrder.updateMany({
+        where: { id, status: "PENDING" },
+        data: { status: "CANCELLED" }
+      });
+      if (update.count === 0) throw new Error("Order state changed, cancellation impossible.");
+
+      // Refund buyer lock if they were selling (Ad BUY type)
+      if (order.type === "BUY") {
         await tx.wallet.update({
           where: { userId: order.creatorId },
-          data: { balance: { increment: order.amountUsdt } }
-        });
-      } else { 
-        // Ad type BUY means merchant bought, user sold.
-        // User's balance was already locked (decremented) during order creation.
-        // Now it goes to the merchant.
-        await tx.wallet.update({
-          where: { userId: order.merchant.userId },
-          data: { balance: { increment: order.amountUsdt } }
+          data: { balance: { increment: order.amountUsdt }, lockedBalance: { decrement: order.amountUsdt } }
         });
       }
 
-      await tx.auditLog.create({
-        data: {
-          userId: req.user!.id,
-          action: "P2P_FUNDS_RELEASED",
-          details: JSON.stringify({ orderId: id, amountUsdt: order.amountUsdt })
-        }
+      // Ad recovery
+      await tx.p2PAd.update({
+        where: { id: order.adId },
+        data: { remainingAmount: { increment: order.amountUsdt } }
       });
     });
-
     res.json({ success: true });
-  } catch (error) {
-    console.error("Release error", error);
-    res.status(500).json({ error: "Failed to release funds" });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
 });
 
-// 8. Open Dispute
-router.post("/orders/:id/dispute", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/dispute", authenticate, async (req: AuthRequest, res) => {
   const { id } = req.params;
   const { reason } = req.body;
   try {
     await prisma.p2POrder.update({
       where: { id },
-      data: { 
-        status: "DISPUTED",
-        disputeReason: reason
-      }
+      data: { status: "DISPUTED", disputeReason: reason }
     });
-    await logAction(req.user!.id, "P2P_ORDER_DISPUTED", { orderId: id, reason });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: "Failed to open dispute" });
+    res.status(500).json({ error: "Dispute failed" });
   }
 });
 
