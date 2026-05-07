@@ -21,7 +21,7 @@ export const Navbar = () => {
           <div className="bg-orange-600 p-1.5 rounded-lg">
             <Wallet className="w-5 h-5 text-white" />
           </div>
-          <span className="font-bold text-xl tracking-tight text-white">TrustEx</span>
+          <span className="font-bold text-xl tracking-tight text-white">Zemen</span>
         </Link>
 
         <div className="flex items-center gap-6">

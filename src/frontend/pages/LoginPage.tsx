@@ -76,7 +76,7 @@ export const LoginPage = () => {
             <div className="bg-orange-600 p-2 rounded-xl">
               <Wallet className="w-8 h-8 text-white" />
             </div>
-            <span className="text-3xl font-bold tracking-tighter text-white uppercase italic">ZemenEX</span>
+            <span className="text-3xl font-bold tracking-tighter text-white uppercase italic">Zemen</span>
           </div>
 
           <motion.div
@@ -85,8 +85,8 @@ export const LoginPage = () => {
             transition={{ duration: 0.8 }}
           >
             <h1 className="text-6xl md:text-8xl font-black text-white leading-tight mb-8 tracking-tighter uppercase italic">
-              ገንዘቤን  ምንዝር <br />
-              <span className="text-orange-500">ዶላሬን ልውጥ</span>
+              P2P Exchange<br />
+              <span className="text-orange-500">Smart Contrat</span>
             </h1>
             <p className="text-zinc-400 text-xl max-w-md leading-relaxed">
               ደህንነቱ የተጠበቀ፣ የተማከለ የመለዋወጫ  ለUSDT እና ለETB ገበያ። በኢትዮጵያ ለሁሉም የተሰራ
@@ -98,7 +98,7 @@ export const LoginPage = () => {
           <div className="flex flex-col gap-2">
             <ShieldCheck className="text-orange-500 w-6 h-6" />
             <span className="text-white font-bold uppercase text-xs tracking-widest">Manual Audit</span>
-            <span className="text-zinc-500 text-sm">Every transaction is manually verified by our team.</span>
+            <span className="text-zinc-500 text-sm">Every transaction is Automaticaly verified by our team.</span>
           </div>
           <div className="flex flex-col gap-2">
             <Zap className="text-orange-500 w-6 h-6" />

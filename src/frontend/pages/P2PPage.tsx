@@ -727,7 +727,7 @@ export const P2PPage = () => {
               <form onSubmit={handleApplyMerchant} className="space-y-4">
                  <h2 className="text-xl font-black text-white italic uppercase">Apply Merchant</h2>
                  <input placeholder="Business Name" required value={merchantForm.businessName} onChange={e => setMerchantForm({...merchantForm, businessName: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white" />
-                 <input placeholder="Phone/PaymentID" required value={merchantForm.phoneNumber} onChange={e => setMerchantForm({...merchantForm, phoneNumber: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white" />
+                 <input placeholder="Phone/Accountnumber" required value={merchantForm.phoneNumber} onChange={e => setMerchantForm({...merchantForm, phoneNumber: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white" />
                  <textarea placeholder="Bio" value={merchantForm.bio} onChange={e => setMerchantForm({...merchantForm, bio: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white h-24" />
                  <div className="flex gap-4">
                     <button type="button" onClick={() => setShowApplyModal(false)} className="flex-1 py-4 text-zinc-500 uppercase italic font-bold">Cancel</button>
