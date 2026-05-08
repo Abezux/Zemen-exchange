@@ -39,6 +39,7 @@ model Wallet {
 enum AdStatus {
   ACTIVE
   INACTIVE
+  EXPIRED
   DELETED
 }
 
