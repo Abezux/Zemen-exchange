@@ -72,7 +72,7 @@ router.get("/my-ads", authenticate, async (req: AuthRequest, res: Response) => {
     const merchant = await prisma.merchant.findUnique({ where: { userId: req.user!.id } });
     if (!merchant) return res.status(404).json({ error: "Merchant not found" });
     const ads = await prisma.p2PAd.findMany({
-      where: { merchantId: merchant.id, NOT: { status: "DELETED" } },
+      where: { merchantId: merchant.id },
       orderBy: { createdAt: "desc" }
     });
     res.json(ads);
@@ -145,6 +145,108 @@ router.post("/ads", authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 /**
+ * 3.1 Edit Ad
+ */
+router.put("/ads/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const { price, minLimit, maxLimit, amount } = req.body;
+  const userId = req.user!.id;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const ad = await tx.p2PAd.findUnique({
+        where: { id },
+        include: { merchant: true, orders: { where: { status: { in: ["PENDING", "PAID"] } } } }
+      });
+
+      if (!ad || ad.merchant.userId !== userId) throw new Error("Unauthorized or Ad not found");
+      if (ad.orders.length > 0) throw new Error("Cannot edit ad with active orders");
+
+      const updates: any = {};
+      if (price !== undefined) updates.price = parseFloat(price);
+      if (minLimit !== undefined) updates.minLimit = parseFloat(minLimit);
+      if (maxLimit !== undefined) updates.maxLimit = parseFloat(maxLimit);
+
+      if (amount !== undefined) {
+        const newAmount = parseFloat(amount);
+        const diff = newAmount - ad.amount;
+
+        if (ad.type === "SELL") {
+          const updatedWallet = await tx.wallet.update({
+            where: { userId },
+            data: {
+              balance: { decrement: diff },
+              lockedBalance: { increment: diff }
+            }
+          });
+          if (updatedWallet.balance < 0) throw new Error("Insufficient balance for amount increase");
+        }
+        updates.amount = newAmount;
+        updates.remainingAmount = ad.remainingAmount + diff;
+        if (updates.remainingAmount < 0) throw new Error("Invalid amount change");
+
+        // Reactivate if amount added, Expire if amount cleared
+        if (updates.remainingAmount > 0.0001 && ad.status === "EXPIRED") {
+          updates.status = "ACTIVE";
+        } else if (updates.remainingAmount <= 0.0001 && ad.status === "ACTIVE") {
+          updates.status = "EXPIRED";
+        }
+      }
+
+      return await tx.p2PAd.update({
+        where: { id },
+        data: updates
+      });
+    });
+
+    await logAction(userId, "P2P_AD_EDITED", { adId: id });
+    res.json(result);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * 3.2 Delete Ad (Soft Delete & Escrow Refund)
+ */
+router.delete("/ads/:id", authenticate, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params;
+  const userId = req.user!.id;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const ad = await tx.p2PAd.findUnique({
+        where: { id },
+        include: { merchant: true, orders: { where: { status: { in: ["PENDING", "PAID"] } } } }
+      });
+
+      if (!ad || ad.merchant.userId !== userId) throw new Error("Unauthorized or Ad not found");
+      if (ad.orders.length > 0) throw new Error("Cannot delete ad with active orders");
+
+      if (ad.type === "SELL" && ad.remainingAmount > 0) {
+        await tx.wallet.update({
+          where: { userId },
+          data: {
+            balance: { increment: ad.remainingAmount },
+            lockedBalance: { decrement: ad.remainingAmount }
+          }
+        });
+      }
+
+      await tx.p2PAd.update({
+        where: { id },
+        data: { status: "DELETED", remainingAmount: 0 }
+      });
+    });
+
+    await logAction(userId, "P2P_AD_DELETED", { adId: id });
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
  * 4. Atomic Order Creation (Liquidity Locking & Escrow)
  */
 router.post("/orders", authenticate, async (req: AuthRequest, res: Response) => {
@@ -179,9 +281,13 @@ router.post("/orders", authenticate, async (req: AuthRequest, res: Response) => 
       }
 
       // Update Ad remaining liquidity
+      const remaining = Math.max(0, ad.remainingAmount - qty);
       await tx.p2PAd.update({
         where: { id: adId },
-        data: { remainingAmount: { decrement: qty } }
+        data: { 
+          remainingAmount: remaining,
+          status: remaining < 0.0001 ? "EXPIRED" : "ACTIVE"
+        }
       });
 
       return await tx.p2POrder.create({
@@ -318,10 +424,17 @@ router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res) =>
       }
 
       // Ad recovery
-      await tx.p2PAd.update({
-        where: { id: order.adId },
-        data: { remainingAmount: { increment: order.amountUsdt } }
-      });
+      const ad = await tx.p2PAd.findUnique({ where: { id: order.adId } });
+      if (ad) {
+        const newRemaining = ad.remainingAmount + order.amountUsdt;
+        await tx.p2PAd.update({
+          where: { id: order.adId },
+          data: { 
+            remainingAmount: newRemaining,
+            status: ad.status === "EXPIRED" ? "ACTIVE" : ad.status
+          }
+        });
+      }
     });
     res.json({ success: true });
   } catch (error: any) {

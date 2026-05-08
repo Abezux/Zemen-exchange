@@ -79,6 +79,7 @@ export const P2PPage = () => {
   const [view, setView] = useState<'market' | 'orders'>('market');
   const [myAds, setMyAds] = useState<any[]>([]);
   const [showAdModal, setShowAdModal] = useState(false);
+  const [editingAd, setEditingAd] = useState<any | null>(null);
   const [adminRates, setAdminRates] = useState({ buyRate: 120, sellRate: 115 });
   const [adForm, setAdForm] = useState({
     type: 'SELL',
@@ -116,10 +117,9 @@ export const P2PPage = () => {
     const numAmount = parseFloat(adForm.amount);
     const numPrice = parseFloat(adForm.price);
     const numMinLimit = parseFloat(adForm.minLimit);
-    const numMaxLimit = parseFloat(adForm.maxLimit);
 
     // Frontend Validations
-    if (adForm.type === 'SELL' && numAmount > (user?.wallet?.balance || 0)) {
+    if (!editingAd && adForm.type === 'SELL' && numAmount > (user?.wallet?.balance || 0)) {
       return alert('Insufficient wallet balance to sell this amount.');
     }
     if (numMinLimit < 500) {
@@ -130,15 +130,45 @@ export const P2PPage = () => {
     }
 
     try {
-      await axios.post('/api/p2p/ads', adForm);
-      alert('Ad created successfully!');
+      if (editingAd) {
+        await axios.put(`/api/p2p/ads/${editingAd.id}`, adForm);
+        alert('Ad updated successfully!');
+      } else {
+        await axios.post('/api/p2p/ads', adForm);
+        alert('Ad created successfully!');
+      }
       setShowAdModal(false);
+      setEditingAd(null);
       checkAuth(); // Refresh wallet balance
       fetchMyAds();
       fetchAds();
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to create ad');
+      alert(error.response?.data?.error || 'Failed to save ad');
     }
+  };
+
+  const handleDeleteAd = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this ad? Remaining USDT will be returned to your balance.')) return;
+    try {
+      await axios.delete(`/api/p2p/ads/${id}`);
+      fetchMyAds();
+      fetchAds();
+      checkAuth();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to delete ad');
+    }
+  };
+
+  const openEditModal = (ad: any) => {
+    setEditingAd(ad);
+    setAdForm({
+      type: ad.type,
+      amount: ad.amount.toString(),
+      price: ad.price.toString(),
+      minLimit: ad.minLimit.toString(),
+      maxLimit: ad.maxLimit.toString()
+    });
+    setShowAdModal(true);
   };
 
   const fetchAds = async () => {
@@ -599,17 +629,46 @@ export const P2PPage = () => {
         <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] space-y-6">
            <div className="flex justify-between items-center">
               <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Merchant Desk</h2>
-              <button onClick={() => setShowAdModal(true)} className="bg-white text-black px-6 py-2 rounded-xl text-xs font-black uppercase italic tracking-tight">Create Ad</button>
+              <button onClick={() => { setEditingAd(null); setAdForm({ type: 'SELL', amount: '', price: '', minLimit: '', maxLimit: '' }); setShowAdModal(true); }} className="bg-white text-black px-6 py-2 rounded-xl text-xs font-black uppercase italic tracking-tight">Create Ad</button>
            </div>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {myAds.map(ad => (
-                <div key={ad.id} className="bg-black/40 border border-zinc-800 p-4 rounded-2xl">
-                   <div className="flex justify-between items-start mb-2">
-                      <p className="text-[10px] font-black text-zinc-500 uppercase italic tracking-widest">{ad.type} AD</p>
-                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${ad.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'}`}>{ad.status}</span>
+                <div key={ad.id} className="bg-black/40 border border-zinc-800 p-6 rounded-[2rem] space-y-4">
+                   <div className="flex justify-between items-start">
+                      <div>
+                         <p className="text-[10px] font-black text-zinc-500 uppercase italic tracking-widest leading-none mb-1">{ad.type} AD</p>
+                         <span className={`text-[8px] font-black px-2 py-0.5 rounded-full border uppercase italic ${
+                            ad.status === 'ACTIVE' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 
+                            ad.status === 'EXPIRED' ? 'bg-orange-500/10 text-orange-500 border-orange-500/20' :
+                            'bg-rose-500/10 text-rose-500 border-rose-500/20'
+                         }`}>{ad.status}</span>
+                      </div>
+                      <div className="flex gap-2">
+                         <button 
+                           onClick={() => openEditModal(ad)}
+                           disabled={ad.status === 'DELETED'}
+                           className="p-2 bg-zinc-800 rounded-lg hover:bg-zinc-700 transition-colors disabled:opacity-30"
+                         >
+                            <Plus className="w-3 h-3 text-zinc-400 rotate-45" />
+                         </button>
+                         <button 
+                           onClick={() => handleDeleteAd(ad.id)}
+                           disabled={ad.status === 'DELETED'}
+                           className="p-2 bg-rose-500/10 rounded-lg hover:bg-rose-500/20 transition-colors disabled:opacity-30"
+                         >
+                            <AlertCircle className="w-3 h-3 text-rose-500" />
+                         </button>
+                      </div>
                    </div>
-                   <p className="text-white font-black italic">{ad.remainingAmount.toFixed(2)} / {ad.amount.toFixed(2)} USDT</p>
-                   <p className="text-zinc-500 text-[10px] font-medium mt-1">Rate: {ad.price} ETB</p>
+                   
+                   <div className="space-y-1">
+                      <p className="text-white font-black italic text-lg leading-tight">{ad.remainingAmount.toFixed(2)} <span className="text-[10px] text-zinc-500">/ {ad.amount.toFixed(2)} USDT</span></p>
+                      <p className="text-zinc-500 text-[10px] font-medium italic">Rate: <span className="text-white">{ad.price} ETB</span></p>
+                   </div>
+
+                   <div className="pt-2 border-t border-zinc-800/50">
+                      <p className="text-[8px] text-zinc-600 font-bold uppercase italic tracking-widest">Limits: {ad.minLimit} - {ad.maxLimit} ETB</p>
+                   </div>
                 </div>
               ))}
            </div>
@@ -645,7 +704,7 @@ export const P2PPage = () => {
            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] w-full max-w-md">
               <form onSubmit={handleCreateAd} className="space-y-4">
                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-black text-white italic uppercase">Post Trade Ad</h2>
+                    <h2 className="text-xl font-black text-white italic uppercase">{editingAd ? 'Edit Trade Ad' : 'Post Trade Ad'}</h2>
                     <div className="bg-orange-500/10 border border-orange-500/20 px-3 py-1 rounded-lg">
                        <p className="text-[8px] text-zinc-500 font-black uppercase italic tracking-widest">Your Balance</p>
                        <p className="text-xs font-black text-orange-500 italic">{user?.wallet?.balance?.toFixed(2)} USDT</p>
@@ -653,8 +712,8 @@ export const P2PPage = () => {
                  </div>
                  
                  <div className="grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => setAdForm({...adForm, type: 'SELL'})} className={`py-4 rounded-xl font-black uppercase italic tracking-tight transition-all border ${adForm.type === 'SELL' ? 'bg-orange-600 border-orange-500 text-white shadow-lg shadow-orange-600/20' : 'bg-black border-zinc-800 text-zinc-600'}`}>Sell USDT</button>
-                    <button type="button" onClick={() => setAdForm({...adForm, type: 'BUY'})} className={`py-4 rounded-xl font-black uppercase italic tracking-tight transition-all border ${adForm.type === 'BUY' ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-600/20' : 'bg-black border-zinc-800 text-zinc-600'}`}>Buy USDT</button>
+                    <button type="button" disabled={!!editingAd} onClick={() => setAdForm({...adForm, type: 'SELL'})} className={`py-4 rounded-xl font-black uppercase italic tracking-tight transition-all border ${adForm.type === 'SELL' ? 'bg-orange-600 border-orange-500 text-white shadow-lg shadow-orange-600/20' : 'bg-black border-zinc-800 text-zinc-600'} ${editingAd ? 'opacity-50 cursor-not-allowed' : ''}`}>Sell USDT</button>
+                    <button type="button" disabled={!!editingAd} onClick={() => setAdForm({...adForm, type: 'BUY'})} className={`py-4 rounded-xl font-black uppercase italic tracking-tight transition-all border ${adForm.type === 'BUY' ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-600/20' : 'bg-black border-zinc-800 text-zinc-600'} ${editingAd ? 'opacity-50 cursor-not-allowed' : ''}`}>Buy USDT</button>
                  </div>
 
                  <div className="space-y-4">
@@ -672,9 +731,9 @@ export const P2PPage = () => {
                              maxLimit: val && price ? (parseFloat(val) * price).toFixed(2) : adForm.maxLimit
                            });
                          }} 
-                         className={`w-full bg-black border rounded-xl px-4 pt-6 pb-3 text-white text-lg font-black italic outline-none transition-all ${adForm.type === 'SELL' && parseFloat(adForm.amount) > (user?.wallet?.balance || 0) ? 'border-rose-500' : 'border-zinc-800 focus:border-orange-500'}`} 
+                         className={`w-full bg-black border rounded-xl px-4 pt-6 pb-3 text-white text-lg font-black italic outline-none transition-all ${adForm.type === 'SELL' && parseFloat(adForm.amount) > ((user?.wallet?.balance || 0) + (editingAd?.amount || 0)) ? 'border-rose-500' : 'border-zinc-800 focus:border-orange-500'}`} 
                        />
-                       {adForm.type === 'SELL' && parseFloat(adForm.amount) > (user?.wallet?.balance || 0) && (
+                       {adForm.type === 'SELL' && parseFloat(adForm.amount) > ((user?.wallet?.balance || 0) + (editingAd?.amount || 0)) && (
                          <p className="text-[8px] text-rose-500 font-bold italic mt-1 ml-4 uppercase">Exceeds available balance</p>
                        )}
                     </div>
@@ -714,7 +773,7 @@ export const P2PPage = () => {
 
                  <div className="flex gap-4 pt-4">
                     <button type="button" onClick={() => setShowAdModal(false)} className="flex-1 py-4 text-zinc-500 uppercase italic font-bold border border-zinc-800 rounded-2xl hover:bg-zinc-800 transition-all">Cancel</button>
-                    <button type="submit" className="flex-1 py-4 bg-white text-black font-black rounded-2xl uppercase italic shadow-xl shadow-white/5 transition-all hover:scale-105 active:scale-95">Publish Ad</button>
+                    <button type="submit" className="flex-1 py-4 bg-white text-black font-black rounded-2xl uppercase italic shadow-xl shadow-white/5 transition-all hover:scale-105 active:scale-95">{editingAd ? 'Update Ad' : 'Publish Ad'}</button>
                  </div>
               </form>
            </motion.div>
@@ -727,7 +786,7 @@ export const P2PPage = () => {
               <form onSubmit={handleApplyMerchant} className="space-y-4">
                  <h2 className="text-xl font-black text-white italic uppercase">Apply Merchant</h2>
                  <input placeholder="Business Name" required value={merchantForm.businessName} onChange={e => setMerchantForm({...merchantForm, businessName: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white" />
-                 <input placeholder="Phone/Accountnumber" required value={merchantForm.phoneNumber} onChange={e => setMerchantForm({...merchantForm, phoneNumber: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white" />
+                 <input placeholder="Phone/PaymentID" required value={merchantForm.phoneNumber} onChange={e => setMerchantForm({...merchantForm, phoneNumber: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white" />
                  <textarea placeholder="Bio" value={merchantForm.bio} onChange={e => setMerchantForm({...merchantForm, bio: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white h-24" />
                  <div className="flex gap-4">
                     <button type="button" onClick={() => setShowApplyModal(false)} className="flex-1 py-4 text-zinc-500 uppercase italic font-bold">Cancel</button>

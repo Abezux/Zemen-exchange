@@ -8,3 +8,5 @@ coverage/
 .env
 Vids/
 prisma/*.db
+prisma/dev.db
+public/uploads/
