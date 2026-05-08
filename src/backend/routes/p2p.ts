@@ -160,10 +160,24 @@ router.put("/ads/:id", authenticate, async (req: AuthRequest, res: Response) => 
       });
 
       if (!ad || ad.merchant.userId !== userId) throw new Error("Unauthorized or Ad not found");
+      if (ad.status !== "ACTIVE" && ad.status !== "EXPIRED") throw new Error("Only active or expired ads can be edited");
       if (ad.orders.length > 0) throw new Error("Cannot edit ad with active orders");
 
       const updates: any = {};
-      if (price !== undefined) updates.price = parseFloat(price);
+      
+      if (price !== undefined) {
+        const numPrice = parseFloat(price);
+        // Enforce Rate Limits (Admin + 0-3% range)
+        const settings = await tx.globalSetting.findUnique({ where: { id: "singleton" } });
+        if (settings) {
+          const adminRate = ad.type === "SELL" ? settings.sellRate : settings.buyRate;
+          if (numPrice > adminRate || numPrice < adminRate * 0.97) {
+            throw new Error(`Price must be between ${(adminRate * 0.97).toFixed(2)} and ${adminRate.toFixed(2)}`);
+          }
+        }
+        updates.price = numPrice;
+      }
+      
       if (minLimit !== undefined) updates.minLimit = parseFloat(minLimit);
       if (maxLimit !== undefined) updates.maxLimit = parseFloat(maxLimit);
 
