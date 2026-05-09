@@ -337,26 +337,31 @@ router.get("/orders", authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/orders/:id/paid", authenticate, async (req: AuthRequest, res) => {
+router.post("/orders/:id/paid", authenticate, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { paymentProof } = req.body;
   const userId = req.user!.id;
 
   try {
     await prisma.$transaction(async (tx) => {
-      const order = await tx.p2POrder.findUnique({ where: { id }, include: { merchant: true } });
+      const order = await tx.p2POrder.findUnique({ where: { id } });
       if (!order) throw new Error("Order not found");
-      if (order.status !== "PENDING") throw new Error("Status mismatch.");
+      
+      // Strict Transition Rule: PENDING -> PAID
+      if (order.status !== "PENDING") throw new Error("Invalid transition: Order must be PENDING to mark as PAID.");
 
-      const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchant.userId === userId);
-      if (!isBuyer) throw new Error("Unauthorized.");
+      const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchantId && (await tx.merchant.findUnique({where:{id: order.merchantId}}))?.userId === userId);
+      // Let's simplify check since merchantId is on order
+      const merchant = await tx.merchant.findUnique({ where: { id: order.merchantId } });
+      const isBuyerCheck = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && merchant?.userId === userId);
+      
+      if (!isBuyerCheck) throw new Error("Only the buyer can confirm payment.");
 
-      // Atomic state change check
       const update = await tx.p2POrder.updateMany({
         where: { id, status: "PENDING" },
         data: { status: "PAID", paymentProof }
       });
-      if (update.count === 0) throw new Error("Order status mismatch (must be PENDING).");
+      if (update.count === 0) throw new Error("Race condition: Order state changed.");
     });
     res.json({ success: true });
   } catch (error: any) {
@@ -364,9 +369,10 @@ router.post("/orders/:id/paid", authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/orders/:id/release", authenticate, async (req: AuthRequest, res) => {
+router.post("/orders/:id/release", authenticate, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const userId = req.user!.id;
+  const isAdmin = req.user!.role === "ADMIN";
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -374,17 +380,26 @@ router.post("/orders/:id/release", authenticate, async (req: AuthRequest, res) =
         where: { id }, 
         include: { merchant: { include: { user: true } } } 
       });
-      if (!order || order.status !== "PAID") throw new Error("Release unavailable.");
+      if (!order) throw new Error("Order not found.");
+      
+      // Strict Transition Rule: PAID -> COMPLETED or DISPUTED -> COMPLETED (Admin)
+      const isDisputedResolve = order.status === "DISPUTED" && isAdmin;
+      const isNormalRelease = order.status === "PAID";
 
-      const isSeller = (order.type === "SELL" && order.merchant.userId === userId) || (order.type === "BUY" && order.creatorId === userId);
-      if (!isSeller) throw new Error("Unauthorized.");
+      if (!isDisputedResolve && !isNormalRelease) {
+        throw new Error("Invalid transition: Release only possible from PAID or DISPUTED (Admin)");
+      }
 
-      // 1. Atomic state switch from PAID to COMPLETED
+      if (!isAdmin) {
+        const isSeller = (order.type === "SELL" && order.merchant.userId === userId) || (order.type === "BUY" && order.creatorId === userId);
+        if (!isSeller) throw new Error("Only the seller can release funds.");
+      }
+
       const update = await tx.p2POrder.updateMany({
-        where: { id, status: "PAID" },
+        where: { id, status: order.status },
         data: { status: "COMPLETED", completedAt: new Date() }
       });
-      if (update.count === 0) throw new Error("Order status mismatch (must be PAID).");
+      if (update.count === 0) throw new Error("Race condition: Order state changed.");
 
       const payerId = order.type === "SELL" ? order.merchant.userId : order.creatorId;
       const payeeId = order.type === "SELL" ? order.creatorId : order.merchant.userId;
@@ -405,9 +420,10 @@ router.post("/orders/:id/release", authenticate, async (req: AuthRequest, res) =
   }
 });
 
-router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res) => {
+router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const userId = req.user!.id;
+  const isAdmin = req.user!.role === "ADMIN";
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -415,19 +431,27 @@ router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res) =>
         where: { id }, 
         include: { merchant: { include: { user: true } } } 
       });
-      if (!order || order.status !== "PENDING") throw new Error("Cancellation barred.");
+      if (!order) throw new Error("Order not found.");
 
-      const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchant.userId === userId);
-      const isSeller = (order.type === "SELL" && order.merchant.userId === userId) || (order.type === "BUY" && order.creatorId === userId);
+      // Strict Transition Rule: PENDING -> CANCELLED or DISPUTED -> CANCELLED (Admin)
+      const isDisputedCancel = order.status === "DISPUTED" && isAdmin;
+      const isNormalCancel = order.status === "PENDING";
 
-      if (!isBuyer && !isSeller) throw new Error("Unauthorized.");
+      if (!isDisputedCancel && !isNormalCancel) {
+        throw new Error("Invalid transition: Cancellation only possible from PENDING or DISPUTED (Admin)");
+      }
 
-      // Atomic switch from PENDING to CANCELLED
+      if (!isAdmin) {
+        const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchant.userId === userId);
+        const isSeller = (order.type === "SELL" && order.merchant.userId === userId) || (order.type === "BUY" && order.creatorId === userId);
+        if (!isBuyer && !isSeller) throw new Error("Unauthorized.");
+      }
+
       const update = await tx.p2POrder.updateMany({
-        where: { id, status: "PENDING" },
+        where: { id, status: order.status },
         data: { status: "CANCELLED" }
       });
-      if (update.count === 0) throw new Error("Order state changed, cancellation impossible.");
+      if (update.count === 0) throw new Error("Race condition: Order state changed.");
 
       // Refund buyer lock if they were selling (Ad BUY type)
       if (order.type === "BUY") {
@@ -456,17 +480,36 @@ router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res) =>
   }
 });
 
-router.post("/orders/:id/dispute", authenticate, async (req: AuthRequest, res) => {
+router.post("/orders/:id/dispute", authenticate, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { reason } = req.body;
+  const userId = req.user!.id;
+
   try {
-    await prisma.p2POrder.update({
-      where: { id },
-      data: { status: "DISPUTED", disputeReason: reason }
+    await prisma.$transaction(async (tx) => {
+      const order = await tx.p2POrder.findUnique({ 
+        where: { id },
+        include: { merchant: true }
+      });
+      if (!order) throw new Error("Order not found");
+      
+      // Strict Transition Rule: PENDING/PAID -> DISPUTED
+      if (order.status !== "PENDING" && order.status !== "PAID") {
+        throw new Error("Only pending or paid orders can be disputed.");
+      }
+
+      const isParticipant = (order.creatorId === userId) || (order.merchant.userId === userId);
+      if (!isParticipant) throw new Error("Unauthorized.");
+
+      const update = await tx.p2POrder.updateMany({
+        where: { id, status: order.status },
+        data: { status: "DISPUTED", disputeReason: reason }
+      });
+      if (update.count === 0) throw new Error("Race condition: Order state changed.");
     });
     res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: "Dispute failed" });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
   }
 });
 
