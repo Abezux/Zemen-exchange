@@ -77,6 +77,7 @@ export const P2PPage = () => {
 
   const [orders, setOrders] = useState<P2POrder[]>([]);
   const [view, setView] = useState<'market' | 'orders'>('market');
+  const [orderFilter, setOrderFilter] = useState<'ACTIVE' | 'PENDING' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED'>('ACTIVE');
   const [myAds, setMyAds] = useState<any[]>([]);
   const [showAdModal, setShowAdModal] = useState(false);
   const [editingAd, setEditingAd] = useState<any | null>(null);
@@ -313,13 +314,17 @@ export const P2PPage = () => {
           {/* Header section with Stats/Intro */}
           <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] shadow-xl relative overflow-hidden">
             <div className="relative z-10">
-              <div className="flex items-center gap-3 mb-4">
-                <Users className="w-6 h-6 text-orange-500" />
-                <h1 className="text-2xl font-black text-white uppercase italic tracking-tighter">P2P Marketplace</h1>
-              </div>
-              <p className="text-zinc-500 text-sm max-w-lg mb-8 leading-relaxed">
-                Trade USDT directly with verified merchants. Low rates, zero fees, and secure escrow protection for every transaction.
-              </p>
+              <AnimatePresence mode="wait">
+                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} key={type}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <Users className="w-6 h-6 text-orange-500" />
+                    <h1 className="text-2xl font-black text-white uppercase italic tracking-tighter">P2P Marketplace</h1>
+                  </div>
+                  <p className="text-zinc-500 text-sm max-w-lg mb-8 leading-relaxed">
+                    Trade USDT directly with verified merchants. Low rates, zero fees, and secure escrow protection for every transaction.
+                  </p>
+                </motion.div>
+              </AnimatePresence>
               
               <div className="flex gap-4">
                 <button 
@@ -345,8 +350,8 @@ export const P2PPage = () => {
               </div>
             </div>
           </div>
-
-          {/* Ads List */}
+          
+          {/* Marketplace Content */}
           <div className="space-y-4">
             <div className="flex justify-between items-center px-4">
               <h2 className="text-xs font-black text-zinc-500 uppercase tracking-widest italic flex items-center gap-2">
@@ -420,8 +425,29 @@ export const P2PPage = () => {
         </div>
       ) : (
         <div className="space-y-6">
-          <AnimatePresence>
-            {orders.map(order => {
+          {/* Order Filter Tabs */}
+          <div className="flex flex-wrap gap-2 mb-6">
+            {(['ACTIVE', 'PENDING', 'COMPLETED', 'CANCELLED', 'DISPUTED'] as const).map(f => (
+              <button 
+                key={f}
+                onClick={() => setOrderFilter(f)}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase italic transition-all ${
+                  orderFilter === f ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' : 'bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-zinc-800'
+                }`}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+
+          <AnimatePresence mode="popLayout">
+            {orders
+              .filter(o => {
+                if (orderFilter === 'ACTIVE') return o.status === 'PENDING' || o.status === 'PAID';
+                if (orderFilter === 'PENDING') return o.status === 'PENDING';
+                return o.status === orderFilter;
+              })
+              .map(order => {
               const isCreator = order.creatorId === user?.id; // The person who clicked "Buy/Sell" on the ad
               const isMerchant = order.merchant.userId === user?.id; // The ad owner
               
