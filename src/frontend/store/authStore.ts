@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import axios from 'axios';
 
+// Configure axios for production
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || '';
 axios.defaults.withCredentials = true;
 
 interface User {

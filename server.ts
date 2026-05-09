@@ -19,14 +19,39 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
+
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,
+    "http://localhost:3000",
+    "http://localhost:5173"
+  ].filter(origin => Boolean(origin)) as string[];
 
   app.use(cors({
-    origin: true,
-    credentials: true
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      const isAllowed = allowedOrigins.some(allowed => origin === allowed || (allowed.endsWith("/") && origin === allowed.slice(0, -1)));
+      
+      if (isAllowed || process.env.NODE_ENV !== "production") {
+        callback(null, true);
+      } else {
+        console.error(`CORS blocked for origin: ${origin}`);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept"],
   }));
   app.use(express.json());
   app.use(cookieParser());
+
+  // Trust proxy for secure cookies on Render
+  if (process.env.NODE_ENV === "production") {
+    app.set("trust proxy", 1);
+  }
 
   //To see what's happening when you click sign-in,
   app.use((req, res, next) => {
