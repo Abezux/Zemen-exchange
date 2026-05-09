@@ -39,3 +39,22 @@ export function authorizeAdmin(req: AuthRequest, res: Response, next: NextFuncti
   }
   next();
 }
+
+import prisma from "../lib/prisma.ts";
+
+export async function checkNotFrozen(req: AuthRequest, res: Response, next: NextFunction) {
+  if (!req.user) return res.status(401).json({ error: "Unauthorized" });
+  
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id }
+    });
+    
+    if (user?.isFrozen) {
+      return res.status(403).json({ error: "Your account is frozen. Please contact administration." });
+    }
+    next();
+  } catch (error) {
+    res.status(500).json({ error: "Error checking account status" });
+  }
+}
