@@ -10,3 +10,4 @@ Vids/
 prisma/*.db
 prisma/dev.db
 public/uploads/
+ui-images/
