@@ -3,8 +3,8 @@
  */
 
 import express, { Response } from "express";
-import { AuthRequest, authenticate, checkNotFrozen } from "../middleware/auth";
-import prisma from "../lib/prisma";
+import { AuthRequest, authenticate, checkNotFrozen } from "../middleware/auth.ts";
+import prisma from "../lib/prisma.ts";
 
 const router = express.Router();
 
