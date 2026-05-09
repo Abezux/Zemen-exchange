@@ -1,5 +1,5 @@
 import { Router, Response } from "express";
-import { authenticate, AuthRequest } from "../middleware/auth.ts";
+import { authenticate, AuthRequest, checkNotFrozen } from "../middleware/auth.ts";
 import prisma from "../lib/prisma.ts";
 
 const router = Router();
@@ -18,7 +18,7 @@ router.get("/history", authenticate, async (req: AuthRequest, res: Response) => 
 });
 
 // POST /withdraw/request
-router.post("/request", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/request", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { amountEtb, destination } = req.body;
 
   if (!amountEtb || !destination) {

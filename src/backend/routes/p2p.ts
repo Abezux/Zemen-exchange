@@ -3,7 +3,7 @@
  */
 
 import express, { Response } from "express";
-import { AuthRequest, authenticate } from "../middleware/auth";
+import { AuthRequest, authenticate, checkNotFrozen } from "../middleware/auth";
 import prisma from "../lib/prisma";
 
 const router = express.Router();
@@ -84,7 +84,7 @@ router.get("/my-ads", authenticate, async (req: AuthRequest, res: Response) => {
 /**
  * 3. Atomic Ad Creation (SELL ads lock funds immediately)
  */
-router.post("/ads", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/ads", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { type, amount, minLimit, maxLimit, price } = req.body;
   const userId = req.user!.id;
   const numAmount = Math.max(0, parseFloat(amount));
@@ -147,7 +147,7 @@ router.post("/ads", authenticate, async (req: AuthRequest, res: Response) => {
 /**
  * 3.1 Edit Ad
  */
-router.put("/ads/:id", authenticate, async (req: AuthRequest, res: Response) => {
+router.put("/ads/:id", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { price, minLimit, maxLimit, amount } = req.body;
   const userId = req.user!.id;
@@ -263,7 +263,7 @@ router.delete("/ads/:id", authenticate, async (req: AuthRequest, res: Response) 
 /**
  * 4. Atomic Order Creation (Liquidity Locking & Escrow)
  */
-router.post("/orders", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { adId, amountUsdt, paymentMethod, idempotencyKey } = req.body;
   const buyerId = req.user!.id;
   const qty = Math.max(0, parseFloat(amountUsdt));
@@ -337,7 +337,7 @@ router.get("/orders", authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/orders/:id/paid", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/paid", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { paymentProof } = req.body;
   const userId = req.user!.id;
@@ -369,7 +369,7 @@ router.post("/orders/:id/paid", authenticate, async (req: AuthRequest, res: Resp
   }
 });
 
-router.post("/orders/:id/release", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/release", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const userId = req.user!.id;
   const isAdmin = req.user!.role === "ADMIN";
@@ -420,7 +420,7 @@ router.post("/orders/:id/release", authenticate, async (req: AuthRequest, res: R
   }
 });
 
-router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/cancel", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const userId = req.user!.id;
   const isAdmin = req.user!.role === "ADMIN";
@@ -480,7 +480,7 @@ router.post("/orders/:id/cancel", authenticate, async (req: AuthRequest, res: Re
   }
 });
 
-router.post("/orders/:id/dispute", authenticate, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   const { reason } = req.body;
   const userId = req.user!.id;
