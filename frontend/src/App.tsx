@@ -1,13 +1,13 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Layout } from './frontend/components/Layout.tsx';
-import { Dashboard } from './frontend/pages/Dashboard.tsx';
-import { LoginPage } from './frontend/pages/LoginPage.tsx';
-import { DepositPage } from './frontend/pages/DepositPage.tsx';
-import { WithdrawPage } from './frontend/pages/WithdrawPage.tsx';
-import { AdminPage } from './frontend/pages/AdminPage.tsx';
-import { P2PPage } from './frontend/pages/P2PPage.tsx';
-import { useAuthStore } from './frontend/store/authStore.ts';
+import { Layout } from './components/Layout.tsx';
+import { Dashboard } from './pages/Dashboard.tsx';
+import { LoginPage } from './pages/LoginPage.tsx';
+import { DepositPage } from './pages/DepositPage.tsx';
+import { WithdrawPage } from './pages/WithdrawPage.tsx';
+import { AdminPage } from './pages/AdminPage.tsx';
+import { P2PPage } from './pages/P2PPage.tsx';
+import { useAuthStore } from './store/authStore.ts';
 
 const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: string }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
