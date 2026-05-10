@@ -7,13 +7,13 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 
 // Routes
-import authRoutes from "./src/backend/routes/auth.ts";
-import userRoutes from "./src/backend/routes/user.ts";
-import depositRoutes from "./src/backend/routes/deposit.ts";
-import withdrawRoutes from "./src/backend/routes/withdraw.ts";
-import adminRoutes from "./src/backend/routes/admin.ts";
-import transactionRoutes from "./src/backend/routes/transaction.ts";
-import p2pRoutes from "./src/backend/routes/p2p.ts";
+import authRoutes from "./backend/routes/auth.ts";
+import userRoutes from "./backend/routes/user.ts";
+import depositRoutes from "./backend/routes/deposit.ts";
+import withdrawRoutes from "./backend/routes/withdraw.ts";
+import adminRoutes from "./backend/routes/admin.ts";
+import transactionRoutes from "./backend/routes/transaction.ts";
+import p2pRoutes from "./backend/routes/p2p.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,12 +75,15 @@ async function startServer() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
+      root: path.join(process.cwd(), "frontend"),
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
+    // In production (Render), typically only serving API
+    // But keeping this as a fallback pointing to the new frontend/dist path
+    const distPath = path.join(process.cwd(), "frontend/dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
