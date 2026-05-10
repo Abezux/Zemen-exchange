@@ -1,6 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
@@ -73,23 +72,10 @@ async function startServer() {
   app.use("/api/transactions", transactionRoutes);
   app.use("/api/p2p", p2pRoutes);
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      root: path.join(process.cwd(), "frontend"),
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    // In production (Render), typically only serving API
-    // But keeping this as a fallback pointing to the new frontend/dist path
-    const distPath = path.join(process.cwd(), "frontend/dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  }
+  // Health check
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", message: "API server is running" });
+  });
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
