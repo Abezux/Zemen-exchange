@@ -26,16 +26,19 @@ router.post("/", authenticate, upload.single("image"), async (req: AuthRequest, 
   }
 
   try {
+    const contentType = req.file.mimetype || "image/jpeg";
+
     const attachment = await prisma.attachment.create({
       data: {
         content: req.file.buffer,
-        contentType: req.file.mimetype,
+        contentType,
       },
     });
 
     res.json({
       id: attachment.id,
-      url: `/uploads/${attachment.id}`, // Custom URL for retrieval
+      url: `/uploads/${attachment.id}`,
+      contentType,
     });
   } catch (error) {
     console.error("Upload error:", error);

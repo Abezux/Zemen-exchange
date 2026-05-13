@@ -68,8 +68,6 @@ export const P2PPage = () => {
   const [showTradeModal, setShowTradeModal] = useState<Ad | null>(null);
   const [tradeAmount, setTradeAmount] = useState({ usdt: '', etb: '' });
   const [selectedPayment, setSelectedPayment] = useState('Telebirr');
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [proofPreview, setProofPreview] = useState<string | null>(null);
   
   const [merchantForm, setMerchantForm] = useState({
     businessName: '',
@@ -91,6 +89,7 @@ export const P2PPage = () => {
     minLimit: '',
     maxLimit: ''
   });
+  const [orderProofs, setOrderProofs] = useState<{ [orderId: string]: { file: File | null; preview: string | null } }>({});
 
   useEffect(() => {
     fetchAds();
@@ -247,27 +246,27 @@ export const P2PPage = () => {
   };
 
   const handleMarkPaid = async (orderId: string) => {
-    if (!proofFile) return;
+    const orderProof = orderProofs[orderId];
+    if (!orderProof?.file) return;
 
     try {
-      // 1. Upload to database
       const formData = new FormData();
-      formData.append('image', proofFile);
+      formData.append('image', orderProof.file);
       const uploadRes = await axios.post('/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       const proofId = uploadRes.data.id;
 
-      // 2. Mark order as paid with proofId
       await axios.post(`/api/p2p/orders/${orderId}/paid`, {
-        proofId: proofId
+        proofId
       });
       alert('Order marked as paid! Waiting for seller release.');
       fetchOrders();
-      setProofFile(null);
-      setProofPreview(null);
+      setOrderProofs(prev => ({ ...prev, [orderId]: { file: null, preview: null } }));
     } catch (error: any) {
-       alert(error.response?.data?.error || 'Failed to mark as paid');
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to mark as paid';
+      alert(errorMsg);
+      console.error('Mark as paid error:', error);
     }
   };
 
@@ -278,18 +277,20 @@ export const P2PPage = () => {
       await axios.post(`/api/p2p/orders/${orderId}/dispute`, { reason });
       alert('Dispute opened. Support will review.');
       fetchOrders();
-    } catch (error) {
-       alert('Failed to open dispute');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to open dispute');
     }
   };
 
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>, orderId: string) => {
     const file = e.target.files?.[0];
     if (file) {
-      setProofFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setProofPreview(reader.result as string);
+        setOrderProofs(prev => ({
+          ...prev,
+          [orderId]: { file, preview: reader.result as string }
+        }));
       };
       reader.readAsDataURL(file);
     }
@@ -541,20 +542,20 @@ export const P2PPage = () => {
 
                               <div className="space-y-4">
                                  <div className="relative group overflow-hidden bg-black/60 border-2 border-dashed border-zinc-800 rounded-[2rem] p-8 text-center transition-all hover:border-orange-500/50">
-                                    <input 
-                                      type="file" 
-                                      accept="image/*" 
-                                      onChange={onFileChange} 
-                                      className="absolute inset-0 opacity-0 cursor-pointer z-10" 
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={(e) => onFileChange(e, order.id)}
+                                      className="absolute inset-0 opacity-0 cursor-pointer z-10"
                                     />
                                     <div className="space-y-3">
-                                       {proofPreview ? (
+                                       {orderProofs[order.id]?.preview ? (
                                          <div className="flex flex-col items-center gap-2">
                                             <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
                                                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
                                             </div>
                                             <p className="text-white text-[10px] font-black uppercase italic">Payment Proof Attached</p>
-                                            <img src={proofPreview} alt="Proof" className="w-20 h-20 object-cover rounded-lg mx-auto border border-zinc-800 mt-2" />
+                                            <img src={orderProofs[order.id].preview} alt="Proof" className="w-20 h-20 object-cover rounded-lg mx-auto border border-zinc-800 mt-2" />
                                          </div>
                                        ) : (
                                          <div className="flex flex-col items-center gap-2">
@@ -567,15 +568,15 @@ export const P2PPage = () => {
                                        )}
                                     </div>
                                  </div>
-                                 
+
                                  <div className="flex gap-4">
                                     <button onClick={() => handleCancelOrder(order.id)} className="flex-1 py-4 text-zinc-500 border border-zinc-800 rounded-2xl uppercase italic font-bold">Cancel Trade</button>
-                                    <button 
-                                      disabled={!proofFile} 
-                                      onClick={() => handleMarkPaid(order.id)} 
+                                    <button
+                                      disabled={!orderProofs[order.id]?.file}
+                                      onClick={() => handleMarkPaid(order.id)}
                                       className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl uppercase italic font-black shadow-xl shadow-orange-600/10 transition-all hover:scale-[1.02] active:scale-95 disabled:bg-zinc-800 disabled:text-zinc-600"
                                     >
-                                       {proofPreview ? "Confirm & Mark Paid" : "Attach Proof to Continue"}
+                                       {orderProofs[order.id]?.preview ? "Confirm & Mark Paid" : "Attach Proof to Continue"}
                                     </button>
                                  </div>
                               </div>
@@ -605,14 +606,14 @@ export const P2PPage = () => {
                                   </div>
                                </div>
 
-                               {order.paymentProof && (
+                               {order.proofId && (
                                   <div className="bg-black/60 p-4 rounded-2xl border border-zinc-800">
                                      <p className="text-[10px] font-black text-zinc-500 uppercase italic mb-2 tracking-widest">Payment Proof Submission</p>
-                                     <img 
-                                       src={getImageUrl(order.paymentProof)} 
-                                       alt="Proof" 
-                                       className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-80 transition-opacity" 
-                                       onClick={() => window.open(getImageUrl(order.paymentProof), '_blank')}
+                                     <img
+                                       src={`${axios.defaults.baseURL}/api/p2p/orders/${order.id}/proof`}
+                                       alt="Proof"
+                                       className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-80 transition-opacity"
+                                       onClick={() => window.open(`${axios.defaults.baseURL}/api/p2p/orders/${order.id}/proof`, '_blank')}
                                      />
                                   </div>
                                )}

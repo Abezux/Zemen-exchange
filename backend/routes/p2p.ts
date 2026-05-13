@@ -337,30 +337,40 @@ router.get("/orders", authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/orders/:id/paid", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
-  const { id } = req.params;
-  const { paymentProof, proofId } = req.body;
+router.post("/orders/:orderId/paid", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
+  const { orderId } = req.params;
+  const { proofId } = req.body;
   const userId = req.user!.id;
+
+  if (!proofId) {
+    return res.status(400).json({ error: "Payment proof ID is required" });
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
-      const order = await tx.p2POrder.findUnique({ where: { id } });
+      const order = await tx.p2POrder.findUnique({
+        where: { id: orderId },
+        include: { merchant: true, proof: true }
+      });
       if (!order) throw new Error("Order not found");
-      
+
       // Strict Transition Rule: PENDING -> PAID
       if (order.status !== "PENDING") throw new Error("Invalid transition: Order must be PENDING to mark as PAID.");
 
-      const merchant = await tx.merchant.findUnique({ where: { id: order.merchantId } });
-      const isBuyerCheck = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && merchant?.userId === userId);
-      
+      // Verify proof exists and belongs to requesting user
+      const proof = await tx.attachment.findUnique({ where: { id: proofId } });
+      if (!proof) throw new Error("Proof not found");
+
+      const isBuyerCheck = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchant.userId === userId);
+
       if (!isBuyerCheck) throw new Error("Only the buyer can confirm payment.");
 
       const update = await tx.p2POrder.updateMany({
-        where: { id, status: "PENDING" },
-        data: { 
-          status: "PAID", 
-          paymentProof: proofId ? `/uploads/${proofId}` : paymentProof,
-          proofId: proofId || null
+        where: { id: orderId, status: "PENDING" },
+        data: {
+          status: "PAID",
+          paymentProof: `/uploads/${proofId}`,
+          proofId
         }
       });
       if (update.count === 0) throw new Error("Race condition: Order state changed.");
@@ -512,6 +522,32 @@ router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: Aut
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+router.get("/orders/:orderId/proof", authenticate, async (req: AuthRequest, res: Response) => {
+  const { orderId } = req.params;
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === "ADMIN";
+
+  try {
+    const order = await prisma.p2POrder.findUnique({
+      where: { id: orderId },
+      include: { merchant: true, proof: true }
+    });
+
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const isParticipant = (order.creatorId === userId) || (order.merchant.userId === userId) || isAdmin;
+    if (!isParticipant) return res.status(403).json({ error: "Unauthorized" });
+
+    if (!order.proof) return res.status(404).json({ error: "No proof attached to this order" });
+
+    res.setHeader("Content-Type", order.proof.contentType);
+    res.setHeader("Cache-Control", "public, max-age=31536000");
+    res.send(order.proof.content);
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to retrieve proof" });
   }
 });
 
