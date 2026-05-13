@@ -525,29 +525,105 @@ router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: Aut
   }
 });
 
-router.get("/orders/:orderId/proof", authenticate, async (req: AuthRequest, res: Response) => {
+router.get("/orders/:orderId/proof", async (req: AuthRequest, res: Response) => {
   const { orderId } = req.params;
-  const userId = req.user!.id;
-  const isAdmin = req.user!.role === "ADMIN";
+  const tokenFromQuery = req.query.token as string;
+  let userId: string | null = null;
+  let isAdmin = false;
 
   try {
+    // Try to get user from auth middleware (cookie)
+    if (req.user) {
+      userId = req.user.id;
+      isAdmin = req.user.role === "ADMIN";
+    }
+    // Fallback: accept token in query string (for image tags that can't send auth headers)
+    else if (tokenFromQuery) {
+      const JWT_SECRET = process.env.JWT_SECRET || "super-secret-key-123";
+      const jwt = require("jsonwebtoken");
+      try {
+        const decoded = jwt.verify(tokenFromQuery, JWT_SECRET) as any;
+        userId = decoded.id;
+        isAdmin = decoded.role === "ADMIN";
+      } catch {
+        console.log(`[PROOF] Invalid token in query`);
+      }
+    }
+
+    if (!userId) {
+      console.log(`[PROOF] No auth for order ${orderId}`);
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
     const order = await prisma.p2POrder.findUnique({
       where: { id: orderId },
       include: { merchant: true, proof: true }
     });
 
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (!order) {
+      console.error(`[PROOF] Order not found: ${orderId}`);
+      return res.status(404).json({ error: "Order not found" });
+    }
 
     const isParticipant = (order.creatorId === userId) || (order.merchant.userId === userId) || isAdmin;
-    if (!isParticipant) return res.status(403).json({ error: "Unauthorized" });
+    if (!isParticipant) {
+      console.error(`[PROOF] Unauthorized access to order ${orderId} by user ${userId}`);
+      return res.status(403).json({ error: "Unauthorized" });
+    }
 
-    if (!order.proof) return res.status(404).json({ error: "No proof attached to this order" });
+    if (!order.proofId || !order.proof) {
+      console.error(`[PROOF] No proof for order ${orderId}. proofId: ${order.proofId}`);
+      return res.status(404).json({ error: "No proof attached to this order" });
+    }
 
-    res.setHeader("Content-Type", order.proof.contentType);
+    if (!order.proof.content || order.proof.content.length === 0) {
+      console.error(`[PROOF] Proof content empty for order ${orderId}`);
+      return res.status(500).json({ error: "Proof content is empty" });
+    }
+
+    const contentType = order.proof.contentType || "image/jpeg";
+    console.log(`[PROOF] Serving proof ${order.proofId} for order ${orderId} (${order.proof.content.length} bytes, type: ${contentType})`);
+
+    res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "public, max-age=31536000");
+    res.setHeader("Content-Length", order.proof.content.length);
     res.send(order.proof.content);
   } catch (error: any) {
-    res.status(500).json({ error: "Failed to retrieve proof" });
+    console.error(`[PROOF] Error retrieving proof for order ${orderId}:`, error);
+    res.status(500).json({ error: "Failed to retrieve proof", details: error.message });
+  }
+});
+
+router.get("/orders/:orderId/debug", authenticate, async (req: AuthRequest, res: Response) => {
+  const { orderId } = req.params;
+  const userId = req.user!.id;
+
+  try {
+    const order = await prisma.p2POrder.findUnique({
+      where: { id: orderId },
+      include: { merchant: true, proof: { select: { id: true, contentType: true, createdAt: true } } }
+    });
+
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const isParticipant = (order.creatorId === userId) || (order.merchant.userId === userId) || (req.user!.role === "ADMIN");
+    if (!isParticipant) return res.status(403).json({ error: "Unauthorized" });
+
+    res.json({
+      orderId: order.id,
+      status: order.status,
+      proofId: order.proofId,
+      paymentProof: order.paymentProof,
+      proof: order.proof ? {
+        id: order.proof.id,
+        contentType: order.proof.contentType,
+        createdAt: order.proof.createdAt,
+        exists: true
+      } : null,
+      attachmentUrl: order.proofId ? `/api/p2p/orders/${orderId}/proof` : null
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: "Failed to debug order", details: error.message });
   }
 });
 
