@@ -108,10 +108,21 @@ model P2POrder {
   status         P2PStatus @default(PENDING)
   paymentMethod  String?   
   paymentProof   String?   
+  proofId        String?
+  proof          Attachment? @relation(fields: [proofId], references: [id])
   disputeReason  String?
   idempotencyKey String?   @unique
   createdAt      DateTime  @default(now())
   completedAt    DateTime?
+}
+
+model Attachment {
+  id          String   @id @default(cuid())
+  content     Bytes
+  contentType String
+  createdAt   DateTime @default(now())
+  depositRequests DepositRequest[]
+  p2pOrders       P2POrder[]
 }
 
 model AuditLog {
@@ -138,6 +149,8 @@ model DepositRequest {
   network       String    @default("TRC20")
   txHash        String    @unique
   proofImageUrl String?
+  proofId       String?
+  proof         Attachment? @relation(fields: [proofId], references: [id])
   status        String    @default("pending") // "pending", "verified", "rejected"
   createdAt     DateTime  @default(now())
   verifiedAt    DateTime?

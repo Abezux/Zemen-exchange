@@ -339,7 +339,7 @@ router.get("/orders", authenticate, async (req: AuthRequest, res) => {
 
 router.post("/orders/:id/paid", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { paymentProof } = req.body;
+  const { paymentProof, proofId } = req.body;
   const userId = req.user!.id;
 
   try {
@@ -350,8 +350,6 @@ router.post("/orders/:id/paid", authenticate, checkNotFrozen, async (req: AuthRe
       // Strict Transition Rule: PENDING -> PAID
       if (order.status !== "PENDING") throw new Error("Invalid transition: Order must be PENDING to mark as PAID.");
 
-      const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchantId && (await tx.merchant.findUnique({where:{id: order.merchantId}}))?.userId === userId);
-      // Let's simplify check since merchantId is on order
       const merchant = await tx.merchant.findUnique({ where: { id: order.merchantId } });
       const isBuyerCheck = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && merchant?.userId === userId);
       
@@ -359,7 +357,11 @@ router.post("/orders/:id/paid", authenticate, checkNotFrozen, async (req: AuthRe
 
       const update = await tx.p2POrder.updateMany({
         where: { id, status: "PENDING" },
-        data: { status: "PAID", paymentProof }
+        data: { 
+          status: "PAID", 
+          paymentProof: proofId ? `/uploads/${proofId}` : paymentProof,
+          proofId: proofId || null
+        }
       });
       if (update.count === 0) throw new Error("Race condition: Order state changed.");
     });

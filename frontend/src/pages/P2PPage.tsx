@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore.ts';
+import { getImageUrl } from '../utils/imageUrl.ts';
 import { 
   Users, 
   ArrowRight, 
@@ -67,7 +68,8 @@ export const P2PPage = () => {
   const [showTradeModal, setShowTradeModal] = useState<Ad | null>(null);
   const [tradeAmount, setTradeAmount] = useState({ usdt: '', etb: '' });
   const [selectedPayment, setSelectedPayment] = useState('Telebirr');
-  const [proofFile, setProofFile] = useState<string | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
   
   const [merchantForm, setMerchantForm] = useState({
     businessName: '',
@@ -245,15 +247,27 @@ export const P2PPage = () => {
   };
 
   const handleMarkPaid = async (orderId: string) => {
+    if (!proofFile) return;
+
     try {
+      // 1. Upload to database
+      const formData = new FormData();
+      formData.append('image', proofFile);
+      const uploadRes = await axios.post('/api/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const proofId = uploadRes.data.id;
+
+      // 2. Mark order as paid with proofId
       await axios.post(`/api/p2p/orders/${orderId}/paid`, {
-        paymentProof: proofFile
+        proofId: proofId
       });
       alert('Order marked as paid! Waiting for seller release.');
       fetchOrders();
       setProofFile(null);
-    } catch (error) {
-       alert('Failed to mark as paid');
+      setProofPreview(null);
+    } catch (error: any) {
+       alert(error.response?.data?.error || 'Failed to mark as paid');
     }
   };
 
@@ -272,9 +286,10 @@ export const P2PPage = () => {
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setProofFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setProofFile(reader.result as string);
+        setProofPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -533,13 +548,13 @@ export const P2PPage = () => {
                                       className="absolute inset-0 opacity-0 cursor-pointer z-10" 
                                     />
                                     <div className="space-y-3">
-                                       {proofFile ? (
+                                       {proofPreview ? (
                                          <div className="flex flex-col items-center gap-2">
                                             <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center">
                                                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
                                             </div>
                                             <p className="text-white text-[10px] font-black uppercase italic">Payment Proof Attached</p>
-                                            <img src={proofFile} alt="Proof" className="w-20 h-20 object-cover rounded-lg mx-auto border border-zinc-800 mt-2" />
+                                            <img src={proofPreview} alt="Proof" className="w-20 h-20 object-cover rounded-lg mx-auto border border-zinc-800 mt-2" />
                                          </div>
                                        ) : (
                                          <div className="flex flex-col items-center gap-2">
@@ -560,7 +575,7 @@ export const P2PPage = () => {
                                       onClick={() => handleMarkPaid(order.id)} 
                                       className="flex-[2] py-4 bg-orange-600 text-white rounded-2xl uppercase italic font-black shadow-xl shadow-orange-600/10 transition-all hover:scale-[1.02] active:scale-95 disabled:bg-zinc-800 disabled:text-zinc-600"
                                     >
-                                       {proofFile ? "Confirm & Mark Paid" : "Attach Proof to Continue"}
+                                       {proofPreview ? "Confirm & Mark Paid" : "Attach Proof to Continue"}
                                     </button>
                                  </div>
                               </div>
@@ -594,10 +609,10 @@ export const P2PPage = () => {
                                   <div className="bg-black/60 p-4 rounded-2xl border border-zinc-800">
                                      <p className="text-[10px] font-black text-zinc-500 uppercase italic mb-2 tracking-widest">Payment Proof Submission</p>
                                      <img 
-                                       src={order.paymentProof} 
+                                       src={getImageUrl(order.paymentProof)} 
                                        alt="Proof" 
                                        className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-80 transition-opacity" 
-                                       onClick={() => window.open(order.paymentProof, '_blank')}
+                                       onClick={() => window.open(getImageUrl(order.paymentProof), '_blank')}
                                      />
                                   </div>
                                )}

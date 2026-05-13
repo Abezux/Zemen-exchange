@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { getImageUrl } from '../utils/imageUrl.ts';
 import { 
   Shield, 
   ArrowDownCircle, 
@@ -494,10 +495,10 @@ export const AdminPage = () => {
                        )}
                        {o.paymentProof && (
                          <button 
-                           onClick={() => setSelectedImage(o.paymentProof!)}
+                           onClick={() => setSelectedImage(getImageUrl(o.paymentProof))}
                            className="flex items-center gap-1.5 text-zinc-500 hover:text-white transition-colors text-[8px] font-black uppercase tracking-tight italic mt-2"
                          >
-                           <Eye className="w-3 h-3" /> External Proof
+                           <Eye className="w-3 h-3" /> View Proof
                          </button>
                        )}
                     </td>
@@ -594,7 +595,7 @@ export const AdminPage = () => {
                     <td className="px-8 py-6">
                       {dep.proofImageUrl && (
                         <button 
-                          onClick={() => setSelectedImage(dep.proofImageUrl)}
+                          onClick={() => setSelectedImage(getImageUrl(dep.proofImageUrl))}
                           className="flex items-center gap-1.5 text-orange-500 hover:text-orange-400 transition-colors text-xs font-bold uppercase tracking-tight italic"
                         >
                           <Eye className="w-4 h-4" /> View Proof

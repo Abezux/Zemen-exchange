@@ -13,6 +13,7 @@ import withdrawRoutes from "./backend/routes/withdraw.ts";
 import adminRoutes from "./backend/routes/admin.ts";
 import transactionRoutes from "./backend/routes/transaction.ts";
 import p2pRoutes from "./backend/routes/p2p.ts";
+import uploadRoutes, { getAttachment } from "./backend/routes/upload.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,8 +61,9 @@ async function startServer() {
   console.log(`${req.method} ${req.url}`);
   next();
   });
-  // Static files for uploads
-  app.use("/uploads", express.static(path.join(process.cwd(), "public/uploads")));
+
+  // DB-based image retrieval
+  app.get("/uploads/:id", getAttachment);
 
   // API routes
   app.use("/api/auth", authRoutes);
@@ -71,6 +73,7 @@ async function startServer() {
   app.use("/api/admin", adminRoutes);
   app.use("/api/transactions", transactionRoutes);
   app.use("/api/p2p", p2pRoutes);
+  app.use("/api/upload", uploadRoutes);
 
   // Health check
   app.get("/api/health", (req, res) => {
