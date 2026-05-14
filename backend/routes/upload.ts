@@ -57,14 +57,25 @@ export const getAttachment = async (req: any, res: Response) => {
     });
 
     if (!attachment) {
+      console.log(`[UPLOAD] Attachment not found: ${id}`);
       return res.status(404).send("Image not found");
     }
 
-    res.setHeader("Content-Type", attachment.contentType);
+    if (!attachment.content || attachment.content.length === 0) {
+      console.error(`[UPLOAD] Attachment content is empty: ${id}`);
+      return res.status(500).send("Image content is empty");
+    }
+
+    const contentType = attachment.contentType || "image/jpeg";
+    console.log(`[UPLOAD] Serving attachment ${id} (${attachment.content.length} bytes, type: ${contentType})`);
+
+    res.setHeader("Content-Type", contentType);
     res.setHeader("Cache-Control", "public, max-age=31536000"); // Cache for 1 year
+    res.setHeader("Content-Length", attachment.content.length);
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.send(attachment.content);
   } catch (error) {
-    console.error("Retrieval error:", error);
+    console.error(`[UPLOAD] Retrieval error for ${id}:`, error);
     res.status(500).send("Internal server error");
   }
 };
