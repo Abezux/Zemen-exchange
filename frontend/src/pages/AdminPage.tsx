@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { getImageUrl } from '../utils/imageUrl.ts';
+import { getImageUrl, loadImageAsBlob } from '../utils/imageUrl.ts';
 import { 
   Shield, 
   ArrowDownCircle, 
@@ -100,6 +100,7 @@ export const AdminPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'deposits' | 'withdrawals' | 'users' | 'merchants' | 'ads' | 'orders' | 'logs'>('deposits');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [loadedImages, setLoadedImages] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     fetchData();
@@ -495,7 +496,16 @@ export const AdminPage = () => {
                        )}
                        {o.paymentProof && (
                          <button 
-                           onClick={() => setSelectedImage(getImageUrl(o.paymentProof))}
+                           onClick={async () => {
+                             const imageKey = `order-${o.id}`;
+                             if (!loadedImages[imageKey]) {
+                               const blobUrl = await loadImageAsBlob(o.paymentProof);
+                               setLoadedImages(prev => ({ ...prev, [imageKey]: blobUrl }));
+                               setSelectedImage(blobUrl);
+                             } else {
+                               setSelectedImage(loadedImages[imageKey]);
+                             }
+                           }}
                            className="flex items-center gap-1.5 text-zinc-500 hover:text-white transition-colors text-[8px] font-black uppercase tracking-tight italic mt-2"
                          >
                            <Eye className="w-3 h-3" /> View Proof
@@ -595,7 +605,15 @@ export const AdminPage = () => {
                     <td className="px-8 py-6">
                       {dep.proofImageUrl && (
                         <button 
-                          onClick={() => setSelectedImage(getImageUrl(dep.proofImageUrl))}
+                          onClick={async () => {
+                            if (!loadedImages[dep.id]) {
+                              const blobUrl = await loadImageAsBlob(dep.proofImageUrl);
+                              setLoadedImages(prev => ({ ...prev, [dep.id]: blobUrl }));
+                              setSelectedImage(blobUrl);
+                            } else {
+                              setSelectedImage(loadedImages[dep.id]);
+                            }
+                          }}
                           className="flex items-center gap-1.5 text-orange-500 hover:text-orange-400 transition-colors text-xs font-bold uppercase tracking-tight italic"
                         >
                           <Eye className="w-4 h-4" /> View Proof
