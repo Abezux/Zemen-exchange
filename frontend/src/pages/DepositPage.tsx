@@ -95,7 +95,7 @@ export const DepositPage = () => {
            <div className="space-y-2">
              <p className="text-red-500 font-black uppercase text-xs tracking-[0.2em] italic">Critical Warning</p>
              <p className="text-zinc-300 text-sm leading-relaxed font-medium">
-               Only send <span className="text-white font-bold">USDT via TRC20 (TRON)</span> network. Sending via other networks (ERC20, BEP20) will result in <span className="text-red-500 font-bold">permanent loss of funds</span>.
+               Only send <span className="text-white font-bold">USDT via TRC20 (TRON) or BEP20 (BSC)</span> network. Sending via other networks (ERC20,SOL,TON) will result in <span className="text-red-500 font-bold">permanent loss of funds</span>.
              </p>
            </div>
         </div>
