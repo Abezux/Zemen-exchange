@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { getImageUrl, loadImageAsBlob } from '../utils/imageUrl.ts';
+import { getImageUrl, loadImageAsDataUrl } from '../utils/imageUrl.ts';
 import { 
   Shield, 
   ArrowDownCircle, 
@@ -499,9 +499,9 @@ export const AdminPage = () => {
                            onClick={async () => {
                              const imageKey = `order-${o.id}`;
                              if (!loadedImages[imageKey]) {
-                               const blobUrl = await loadImageAsBlob(o.paymentProof);
-                               setLoadedImages(prev => ({ ...prev, [imageKey]: blobUrl }));
-                               setSelectedImage(blobUrl);
+                               const dataUrl = await loadImageAsDataUrl(o.paymentProof);
+                               setLoadedImages(prev => ({ ...prev, [imageKey]: dataUrl }));
+                               setSelectedImage(dataUrl);
                              } else {
                                setSelectedImage(loadedImages[imageKey]);
                              }
@@ -607,9 +607,9 @@ export const AdminPage = () => {
                         <button 
                           onClick={async () => {
                             if (!loadedImages[dep.id]) {
-                              const blobUrl = await loadImageAsBlob(dep.proofImageUrl);
-                              setLoadedImages(prev => ({ ...prev, [dep.id]: blobUrl }));
-                              setSelectedImage(blobUrl);
+                              const dataUrl = await loadImageAsDataUrl(dep.proofImageUrl);
+                              setLoadedImages(prev => ({ ...prev, [dep.id]: dataUrl }));
+                              setSelectedImage(dataUrl);
                             } else {
                               setSelectedImage(loadedImages[dep.id]);
                             }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore.ts';
-import { getImageUrl, loadImageAsBlob } from '../utils/imageUrl.ts';
+import { getImageUrl, loadImageAsDataUrl } from '../utils/imageUrl.ts';
 import { 
   Users, 
   ArrowRight, 
@@ -106,8 +106,8 @@ export const P2PPage = () => {
       for (const order of orders) {
         if (order.proofId && !proofImages[order.id]) {
           try {
-            const blobUrl = await loadImageAsBlob(`/api/p2p/orders/${order.id}/proof`);
-            setProofImages(prev => ({ ...prev, [order.id]: blobUrl }));
+            const dataUrl = await loadImageAsDataUrl(`/api/p2p/orders/${order.id}/proof`);
+            setProofImages(prev => ({ ...prev, [order.id]: dataUrl }));
           } catch (error) {
             console.error(`Failed to load proof for order ${order.id}:`, error);
           }

@@ -14,38 +14,42 @@ export const getImageUrl = (path: string | null) => {
   return `${normalizedBaseURL}${normalizedPath}`;
 };
 
-
-//  * Fetch image as a blob URL with proper authentication
-//  *// Handles both authenticated// endpoints (/api/p2p/orders/*/proof) and 
-//  *// public endpoints (/uploads/*) 
-
-export const loadImageAsBlob = async (imagePath: string | null): Promise<string> => {
+/**
+ * Fetch image and convert to base64 data URL
+ * Works for both authenticated and public endpoints
+ */
+export const loadImageAsDataUrl = async (imagePath: string | null): Promise<string> => {
   if (!imagePath) return '';
   if (imagePath.startsWith('data:')) return imagePath;
-  if (imagePath.startsWith('blob:')) return imagePath;
   
   try {
     const fullUrl = getImageUrl(imagePath);
     console.log(`[IMAGE-LOAD] Fetching image from: ${fullUrl}`);
     
     const response = await axios.get(fullUrl, {
-      responseType: 'blob',
-      timeout: 30000 // 30 second timeout for slower connections
+      responseType: 'arraybuffer',
+      timeout: 30000
     });
     
-    if (!response.data || response.data.size === 0) {
+    if (!response.data || response.data.byteLength === 0) {
       console.error(`[IMAGE-LOAD] Image response is empty from ${fullUrl}`);
       throw new Error('Image content is empty');
     }
     
-    const blob = new Blob([response.data], { 
-      type: response.headers['content-type'] || 'image/jpeg' 
-    });
+    // Convert arraybuffer to base64
+    const bytes = new Uint8Array(response.data);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
     
-    const blobUrl = URL.createObjectURL(blob);
-    console.log(`[IMAGE-LOAD] Successfully loaded image (${blob.size} bytes) from ${fullUrl}`);
+    const contentType = response.headers['content-type'] || 'image/jpeg';
+    const dataUrl = `data:${contentType};base64,${base64}`;
     
-    return blobUrl;
+    console.log(`[IMAGE-LOAD] Successfully loaded image (${response.data.byteLength} bytes) from ${fullUrl}`);
+    
+    return dataUrl;
   } catch (error: any) {
     console.error(`[IMAGE-LOAD] Failed to load image from ${imagePath}:`, error.message || error);
     // Return a transparent 1x1 pixel as fallback
