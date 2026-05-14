@@ -292,78 +292,78 @@ export const P2PPage = () => {
   };
 
   return (
-    <div className="space-y-8 pb-20">
+    <div className="space-y-4 sm:space-y-6 md:space-y-8 pb-20">
       {/* Navigation Tabs */}
-      <div className="flex gap-4 border-b border-zinc-800">
+      <div className="flex gap-2 sm:gap-4 border-b border-zinc-800 text-xs sm:text-sm">
         <button 
           onClick={() => setView('market')} 
-          className={`pb-4 px-2 text-xs font-black uppercase italic tracking-widest transition-all ${view === 'market' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-zinc-500'}`}
+          className={`pb-2 sm:pb-4 px-1 sm:px-2 text-[9px] sm:text-xs font-black uppercase italic tracking-widest transition-all ${view === 'market' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-zinc-500'}`}
         >
           Marketplace
         </button>
         <button 
           onClick={() => setView('orders')} 
-          className={`pb-4 px-2 text-xs font-black uppercase italic tracking-widest transition-all ${view === 'orders' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-zinc-500'}`}
+          className={`pb-2 sm:pb-4 px-1 sm:px-2 text-[9px] sm:text-xs font-black uppercase italic tracking-widest transition-all ${view === 'orders' ? 'text-orange-500 border-b-2 border-orange-500' : 'text-zinc-500'}`}
         >
           Active Trades
         </button>
       </div>
 
       {view === 'market' ? (
-        <div className="space-y-8">
+        <div className="space-y-4 sm:space-y-6 md:space-y-8">
           {/* Header section with Stats/Intro */}
-          <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] shadow-xl relative overflow-hidden">
+          <div className="bg-zinc-900 border border-zinc-800 p-3 sm:p-6 md:p-8 rounded-[2rem] shadow-xl relative overflow-hidden">
             <div className="relative z-10">
               <AnimatePresence mode="wait">
                 <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} key={type}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <Users className="w-6 h-6 text-orange-500" />
-                    <h1 className="text-2xl font-black text-white uppercase italic tracking-tighter">P2P Marketplace</h1>
+                  <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
+                    <Users className="w-5 sm:w-6 h-5 sm:h-6 text-orange-500 shrink-0" />
+                    <h1 className="text-lg sm:text-2xl font-black text-white uppercase italic tracking-tighter">P2P Marketplace</h1>
                   </div>
-                  <p className="text-zinc-500 text-sm max-w-lg mb-8 leading-relaxed">
+                  <p className="text-zinc-500 text-[11px] sm:text-sm max-w-lg mb-4 sm:mb-8 leading-relaxed">
                     Trade USDT directly with verified merchants. Low rates, zero fees, and secure escrow protection for every transaction.
                   </p>
                 </motion.div>
               </AnimatePresence>
               
-              <div className="flex gap-4">
+              <div className="flex gap-2 sm:gap-4">
                 <button 
                   onClick={() => setType('SELL')}
-                  className={`flex-1 py-4 rounded-2xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-2.5 sm:py-4 rounded-2xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 text-xs sm:text-sm ${
                     type === 'SELL' 
                       ? 'bg-white text-black scale-105 shadow-xl shadow-white/10' 
                       : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                   }`}
                 >
-                  <ArrowDownLeft className="w-5 h-5" /> Buy USDT
+                  <ArrowDownLeft className="w-4 sm:w-5 h-4 sm:h-5" /> <span className="hidden sm:inline">Buy USDT</span><span className="sm:hidden">Buy</span>
                 </button>
                 <button 
                   onClick={() => setType('BUY')}
-                  className={`flex-1 py-4 rounded-2xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 ${
+                  className={`flex-1 py-2.5 sm:py-4 rounded-2xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 text-xs sm:text-sm ${
                     type === 'BUY' 
                       ? 'bg-orange-600 text-white scale-105 shadow-xl shadow-orange-600/20' 
                       : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
                   }`}
                 >
-                  <ArrowUpRight className="w-5 h-5" /> Sell USDT
+                  <ArrowUpRight className="w-4 sm:w-5 h-4 sm:h-5" /> <span className="hidden sm:inline">Sell USDT</span><span className="sm:hidden">Sell</span>
                 </button>
               </div>
             </div>
           </div>
           
           {/* Marketplace Content */}
-          <div className="space-y-4">
-            <div className="flex justify-between items-center px-4">
-              <h2 className="text-xs font-black text-zinc-500 uppercase tracking-widest italic flex items-center gap-2">
-                <ShieldCheck className="w-3 h-3" /> Active {type === 'SELL' ? 'SELL' : 'BUY'} Offers
+          <div className="space-y-2 sm:space-y-4">
+            <div className="flex justify-between items-center px-0 sm:px-4">
+              <h2 className="text-[9px] sm:text-xs font-black text-zinc-500 uppercase tracking-widest italic flex items-center gap-2">
+                <ShieldCheck className="w-3 h-3 sm:w-4 sm:h-4" /> Active {type === 'SELL' ? 'SELL' : 'BUY'} Offers
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 gap-4">
+            <div className="grid grid-cols-1 gap-2 sm:gap-4">
               <AnimatePresence mode="popLayout">
                 {isLoading ? (
                   [1, 2, 3].map(i => (
-                    <div key={i} className="h-32 bg-zinc-900/50 animate-pulse rounded-3xl border border-zinc-800"></div>
+                    <div key={i} className="h-20 sm:h-32 bg-zinc-900/50 animate-pulse rounded-3xl border border-zinc-800"></div>
                   ))
                 ) : ads.length > 0 ? (
                   ads.map((ad) => (
@@ -371,36 +371,36 @@ export const P2PPage = () => {
                       key={ad.id}
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-zinc-900/40 border border-zinc-800/60 p-6 rounded-3xl hover:border-zinc-700 transition-all group"
+                      className="bg-zinc-900/40 border border-zinc-800/60 p-3 sm:p-6 rounded-3xl hover:border-zinc-700 transition-all group"
                     >
-                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                        <div className="flex items-center gap-4">
-                           <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center font-black text-orange-500 italic text-xl border border-zinc-800">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-6">
+                        <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
+                           <div className="w-10 sm:w-12 h-10 sm:h-12 bg-white/5 rounded-2xl flex items-center justify-center font-black text-orange-500 italic text-lg sm:text-xl border border-zinc-800 shrink-0">
                              {ad.merchant.businessName.charAt(0)}
                            </div>
-                           <div>
-                             <h4 className="text-white font-black italic uppercase tracking-tight flex items-center gap-2">
-                               {ad.merchant.businessName}
-                               <span className="bg-emerald-500/10 text-emerald-500 text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/20">VERIFIED</span>
+                           <div className="min-w-0 flex-1 sm:flex-none">
+                             <h4 className="text-white font-black italic uppercase tracking-tight text-xs sm:text-base flex items-center gap-2 flex-wrap">
+                               {ad.merchant.businessName.substring(0, 15)}
+                               <span className="bg-emerald-500/10 text-emerald-500 text-[7px] sm:text-[8px] px-1 sm:px-1.5 py-0.5 rounded border border-emerald-500/20 whitespace-nowrap">VERIFIED</span>
                              </h4>
-                             <p className="text-zinc-500 text-xs font-medium">98.5% Completion • 12min Avg</p>
+                             <p className="text-zinc-500 text-[8px] sm:text-xs font-medium">98.5% • 12min</p>
                            </div>
                         </div>
 
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-8 w-full md:w-auto">
-                           <div>
-                             <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Price</p>
-                             <h5 className="text-xl font-black text-white italic tracking-tighter leading-none">{ad.price} <span className="text-[10px] text-zinc-500">ETB</span></h5>
+                        <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-8 w-full sm:w-auto">
+                           <div className="min-w-0">
+                             <p className="text-[8px] sm:text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic whitespace-nowrap">Price</p>
+                             <h5 className="text-lg sm:text-xl font-black text-white italic tracking-tighter leading-none">{ad.price} <span className="text-[8px] sm:text-[10px] text-zinc-500">ETB</span></h5>
                            </div>
-                           <div>
-                             <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Available</p>
-                             <h5 className="text-sm font-black text-zinc-300 italic tracking-tight">{ad.remainingAmount.toFixed(2)} USDT</h5>
-                             <p className="text-[10px] text-zinc-500 font-mono italic">Limits: {ad.minLimit}-{ad.maxLimit} ETB</p>
+                           <div className="min-w-0">
+                             <p className="text-[8px] sm:text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic whitespace-nowrap">Available</p>
+                             <h5 className="text-xs sm:text-sm font-black text-zinc-300 italic tracking-tight">{ad.remainingAmount.toFixed(1)} USDT</h5>
+                             <p className="text-[7px] sm:text-[10px] text-zinc-500 font-mono italic">L:{ad.minLimit.toFixed(0)}-{ad.maxLimit.toFixed(0)}</p>
                            </div>
-                           <div className="col-span-2 lg:col-span-1 flex items-center">
+                           <div className="col-span-1 sm:col-span-1 lg:col-span-1 flex items-center">
                              <button 
                                 onClick={() => setShowTradeModal(ad)}
-                                className={`w-full lg:w-40 py-3 rounded-xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 ${
+                                className={`w-full py-2 sm:py-3 rounded-xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-1 text-xs sm:text-sm ${
                                   type === 'SELL' 
                                     ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/10' 
                                     : 'bg-white text-black hover:bg-zinc-200'
@@ -424,14 +424,14 @@ export const P2PPage = () => {
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-3 sm:space-y-4 md:space-y-6">
           {/* Order Filter Tabs */}
-          <div className="flex flex-wrap gap-2 mb-6">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3 sm:mb-4 md:mb-6 overflow-x-auto pb-2">
             {(['ACTIVE', 'PENDING', 'COMPLETED', 'CANCELLED', 'DISPUTED'] as const).map(f => (
               <button 
                 key={f}
                 onClick={() => setOrderFilter(f)}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase italic transition-all ${
+                className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[8px] sm:text-[10px] font-black uppercase italic transition-all whitespace-nowrap ${
                   orderFilter === f ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/20' : 'bg-zinc-900 border border-zinc-800 text-zinc-500 hover:bg-zinc-800'
                 }`}
               >
@@ -462,25 +462,25 @@ export const P2PPage = () => {
                    key={order.id}
                    initial={{ opacity: 0, y: 10 }}
                    animate={{ opacity: 1, y: 0 }}
-                   className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] shadow-2xl space-y-6"
+                   className="bg-zinc-900 border border-zinc-800 p-3 sm:p-6 md:p-8 rounded-[2rem] shadow-2xl space-y-3 sm:space-y-4 md:space-y-6"
                 >
-                   <div className="flex justify-between items-center pb-6 border-b border-zinc-800/50">
-                      <div className="flex items-center gap-4">
-                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                   <div className="flex justify-between items-center pb-2 sm:pb-4 md:pb-6 border-b border-zinc-800/50">
+                      <div className="flex items-center gap-2 sm:gap-4">
+                         <div className={`w-10 sm:w-12 h-10 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 ${
                             order.status === 'COMPLETED' ? 'bg-emerald-500/10 text-emerald-500' :
                             order.status === 'DISPUTED' ? 'bg-rose-500/10 text-rose-500' :
                             'bg-orange-500/10 text-orange-500'
                          }`}>
-                            {order.status === 'COMPLETED' ? <CheckCircle2 className="w-6 h-6" /> : <Clock className="w-6 h-6 animate-pulse" />}
+                            {order.status === 'COMPLETED' ? <CheckCircle2 className="w-5 sm:w-6 h-5 sm:h-6" /> : <Clock className="w-5 sm:w-6 h-5 sm:h-6 animate-pulse" />}
                          </div>
                          <div>
-                            <p className="text-zinc-500 text-[10px] font-black uppercase italic tracking-[0.2em] mb-1">Order #{order.id.slice(-6)}</p>
-                            <h3 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">
-                               {isBuyer ? 'Buying' : 'Selling'} USDT
+                            <p className="text-zinc-500 text-[8px] sm:text-[10px] font-black uppercase italic tracking-[0.2em] mb-0.5 sm:mb-1">Order #{order.id.slice(-6)}</p>
+                            <h3 className="text-base sm:text-lg md:text-xl font-black text-white uppercase italic tracking-tighter leading-none">
+                               {isBuyer ? 'Buy' : 'Sell'} USDT
                             </h3>
                          </div>
                       </div>
-                      <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase italic border ${
+                      <div className={`px-2 sm:px-4 py-1 sm:py-2 rounded-xl text-[7px] sm:text-[10px] font-black uppercase italic border shrink-0 whitespace-nowrap ${
                          order.status === 'COMPLETED' ? 'border-emerald-500/50 text-emerald-500' : 
                          order.status === 'DISPUTED' ? 'border-rose-500/50 text-rose-500' :
                          'border-orange-500/50 text-orange-500'
@@ -489,14 +489,14 @@ export const P2PPage = () => {
                       </div>
                    </div>
 
-                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="bg-black/40 p-4 rounded-2xl border border-zinc-800/50">
-                         <p className="text-[10px] text-zinc-500 font-bold uppercase italic mb-1">Quantity</p>
-                         <p className="text-white font-black italic">{order.amountUsdt.toFixed(2)} USDT</p>
+                   <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+                      <div className="bg-black/40 p-2 sm:p-4 rounded-2xl border border-zinc-800/50">
+                         <p className="text-[8px] sm:text-[10px] text-zinc-500 font-bold uppercase italic mb-0.5 sm:mb-1">Qty</p>
+                         <p className="text-sm sm:text-base font-black text-white italic">{order.amountUsdt.toFixed(1)}</p>
                       </div>
-                      <div className="bg-black/40 p-4 rounded-2xl border border-zinc-800/50 col-span-2">
-                         <p className="text-[10px] text-orange-500 font-bold uppercase italic mb-1">Total Fiat</p>
-                         <p className="text-2xl font-black text-white italic tracking-tighter leading-none">{order.amountEtb.toLocaleString()} ETB</p>
+                      <div className="bg-black/40 p-2 sm:p-4 rounded-2xl border border-zinc-800/50 col-span-1">
+                         <p className="text-[8px] sm:text-[10px] text-orange-500 font-bold uppercase italic mb-0.5 sm:mb-1">ETB</p>
+                         <p className="text-sm sm:text-xl md:text-2xl font-black text-white italic tracking-tighter leading-none">{order.amountEtb.toLocaleString()}</p>
                       </div>
                    </div>
 

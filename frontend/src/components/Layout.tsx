@@ -32,7 +32,7 @@ export const Layout = () => {
   return (
     <div className="min-h-screen bg-black text-zinc-100 font-sans">
       <Navbar />
-      <main className="max-w-7xl mx-auto p-4 md:p-8">
+      <main className="max-w-7xl mx-auto p-2 sm:p-4 md:p-8">
         <Outlet />
       </main>
     </div>

@@ -148,10 +148,10 @@ export const DepositPage = () => {
                 />
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5 sm:space-y-2">
                 <div className="flex justify-between items-end">
-                  <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest italic">Exact Amount (USDT)</label>
-                  <span className="text-[10px] font-black text-emerald-500 italic uppercase">Rate: {buyRate} ETB/USDT</span>
+                  <label className="text-zinc-500 text-[9px] sm:text-[10px] font-black uppercase tracking-widest italic">Exact Amount (USDT)</label>
+                  <span className="text-[8px] sm:text-[10px] font-black text-emerald-500 italic uppercase">Rate: {buyRate} ETB/USDT</span>
                 </div>
                 <input 
                   type="number" 
@@ -159,21 +159,21 @@ export const DepositPage = () => {
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="0.00"
-                  className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder:text-zinc-700 focus:border-orange-600 outline-none transition-all font-bold italic"
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base text-white placeholder:text-zinc-700 focus:border-orange-600 outline-none transition-all font-bold italic"
                 />
                 {amount && (
-                  <p className="text-[10px] text-zinc-500 font-mono italic">
-                    Amonunt in ETB  <span className="text-white font-bold">{etbRequired} ETB</span> 
+                  <p className="text-[8px] sm:text-[10px] text-zinc-500 font-mono italic">
+                    Amount in ETB: <span className="text-white font-bold">{etbRequired} ETB</span> 
                   </p>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label className="text-zinc-500 text-[10px] font-black uppercase tracking-widest italic">Proof of Payment</label>
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 hover:bg-zinc-900/50 transition-all">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <Upload className="w-8 h-8 text-zinc-600 mb-2" />
-                    <p className="text-xs text-zinc-500 italic">{file ? file.name : "Click to upload screenshot"}</p>
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-zinc-500 text-[9px] sm:text-[10px] font-black uppercase tracking-widest italic">Proof of Payment</label>
+                <label className="flex flex-col items-center justify-center w-full h-24 sm:h-32 border-2 border-dashed border-zinc-800 rounded-2xl cursor-pointer hover:border-zinc-700 hover:bg-zinc-900/50 transition-all">
+                  <div className="flex flex-col items-center justify-center pt-3 sm:pt-5 pb-3 sm:pb-6">
+                    <Upload className="w-6 sm:w-8 h-6 sm:h-8 text-zinc-600 mb-1 sm:mb-2" />
+                    <p className="text-[9px] sm:text-xs text-zinc-500 italic text-center px-2">{file ? file.name : "Click to upload screenshot"}</p>
                   </div>
                   <input type="file" className="hidden" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                 </label>
@@ -181,15 +181,15 @@ export const DepositPage = () => {
            </div>
 
            {error && (
-             <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex items-center gap-3 text-rose-500 text-sm italic font-medium">
-               <AlertTriangle className="w-4 h-4" /> {error}
+             <div className="bg-rose-500/10 border border-rose-500/20 p-2 sm:p-4 rounded-xl flex items-center gap-2 sm:gap-3 text-rose-500 text-xs sm:text-sm italic font-medium">
+               <AlertTriangle className="w-3.5 sm:w-4 h-3.5 sm:h-4 shrink-0" /> {error}
              </div>
            )}
 
            <button 
              type="submit" 
              disabled={isSubmitting}
-             className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest italic shadow-lg transition-all ${
+             className={`w-full py-3 sm:py-4 rounded-2xl font-black uppercase tracking-widest italic shadow-lg transition-all text-sm sm:text-base ${
                isSubmitting ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' : 'bg-white text-black hover:bg-zinc-200 active:scale-[0.98]'
              }`}
            >
