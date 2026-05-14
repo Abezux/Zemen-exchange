@@ -90,6 +90,7 @@ export const P2PPage = () => {
     maxLimit: ''
   });
   const [orderProofs, setOrderProofs] = useState<{ [orderId: string]: { file: File | null; preview: string | null } }>({});
+  const [proofImages, setProofImages] = useState<{ [orderId: string]: string }>({});
 
   useEffect(() => {
     fetchAds();
@@ -97,6 +98,30 @@ export const P2PPage = () => {
     if (view === 'orders') fetchOrders();
     if (user?.merchant?.status === 'APPROVED') fetchMyAds();
   }, [type, view, user?.merchant?.status]);
+
+  // Load proof images for orders that have them
+  useEffect(() => {
+    const loadProofImages = async () => {
+      for (const order of orders) {
+        if (order.proofId && !proofImages[order.id]) {
+          try {
+            const response = await axios.get(`/api/p2p/orders/${order.id}/proof`, {
+              responseType: 'blob'
+            });
+            const blob = new Blob([response.data], { type: response.headers['content-type'] || 'image/jpeg' });
+            const url = URL.createObjectURL(blob);
+            setProofImages(prev => ({ ...prev, [order.id]: url }));
+          } catch (error) {
+            console.error(`Failed to load proof for order ${order.id}:`, error);
+          }
+        }
+      }
+    };
+    
+    if (orders.length > 0) {
+      loadProofImages();
+    }
+  }, [orders]);
 
   const fetchAdminRates = async () => {
     try {
@@ -610,10 +635,14 @@ export const P2PPage = () => {
                                   <div className="bg-black/60 p-4 rounded-2xl border border-zinc-800">
                                      <p className="text-[10px] font-black text-zinc-500 uppercase italic mb-2 tracking-widest">Payment Proof Submission</p>
                                      <img
-                                       src={`${axios.defaults.baseURL}/api/p2p/orders/${order.id}/proof`}
+                                       src={proofImages[order.id] || ''}
                                        alt="Proof"
                                        className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-80 transition-opacity"
-                                       onClick={() => window.open(`${axios.defaults.baseURL}/api/p2p/orders/${order.id}/proof`, '_blank')}
+                                       onClick={() => {
+                                         if (proofImages[order.id]) {
+                                           window.open(proofImages[order.id], '_blank');
+                                         }
+                                       }}
                                      />
                                   </div>
                                )}
