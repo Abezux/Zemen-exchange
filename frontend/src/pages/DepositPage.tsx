@@ -13,7 +13,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { useAuthStore } from '../store/authStore.ts';
 
-const STATIC_TRC20_ADDRESS = "T9yD9swLp46r7y3ttH7Z8D889w44556677"; // Dummy address
+const STATIC_TRC20_ADDRESS = "TMAKxrnXeTAmSda3iEfuvBnhLcFZkqN5Dn"; // Dummy address
+const STATIC_BEP20_ADDRESS = "0x7e88926125eb6749b5186034051db80dc52f3275"; //
 
 export const DepositPage = () => {
   const navigate = useNavigate();
@@ -102,14 +103,28 @@ export const DepositPage = () => {
         {/* Wallet Display */}
         <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] space-y-6 shadow-2xl">
            <div className="space-y-2">
-             <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest italic">Personal Deposit Address (TRC20)</p>
+             <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest italic">Deposit Address TRX(TRC20)</p>
              <div className="flex bg-black p-4 rounded-xl border border-zinc-800 items-center gap-4">
                 <code className="text-orange-500 font-mono text-sm break-all flex-1">{STATIC_TRC20_ADDRESS}</code>
                 <button onClick={handleCopy} className="p-2 text-zinc-400 hover:text-white bg-zinc-900 rounded-lg transition-all">
                   <Copy className="w-4 h-4" />
                 </button>
+                
              </div>
+             
            </div>
+            <div className="space-y-2">
+             <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest italic">BSC(BEP20)</p>
+             <div className="flex bg-black p-4 rounded-xl border border-zinc-800 items-center gap-4">
+                <code className="text-orange-500 font-mono text-sm break-all flex-1">{STATIC_BEP20_ADDRESS}</code>
+                <button onClick={handleCopy} className="p-2 text-zinc-400 hover:text-white bg-zinc-900 rounded-lg transition-all">
+                  <Copy className="w-4 h-4" />
+                </button>
+                
+             </div>
+             
+           </div>
+
 
            <div className="bg-zinc-950 p-4 rounded-2xl flex items-start gap-3">
              <Info className="w-5 h-5 text-zinc-600 shrink-0 mt-0.5" />
@@ -148,7 +163,7 @@ export const DepositPage = () => {
                 />
                 {amount && (
                   <p className="text-[10px] text-zinc-500 font-mono italic">
-                    Transfer <span className="text-white font-bold">{etbRequired} ETB</span> to admin account for this amount.
+                    Amonunt in ETB  <span className="text-white font-bold">{etbRequired} ETB</span> 
                   </p>
                 )}
               </div>

@@ -85,11 +85,11 @@ export const LoginPage = () => {
             transition={{ duration: 0.8 }}
           >
             <h1 className="text-6xl md:text-8xl font-black text-white leading-tight mb-8 tracking-tighter uppercase italic">
-              P2P Exchange<br />
-              <span className="text-orange-500">Smart Contrat</span>
+              Fast and secure<br />
+              <span className="text-orange-500">P2P trading</span>
             </h1>
             <p className="text-zinc-400 text-xl max-w-md leading-relaxed">
-              ደህንነቱ የተጠበቀ፣ የተማከለ የመለዋወጫ  ለUSDT እና ለETB ገበያ። በኢትዮጵያ ለሁሉም የተሰራ
+              Trade with verified merchants. Funds are held in escrow.
             </p>
           </motion.div>
         </div>
@@ -97,13 +97,13 @@ export const LoginPage = () => {
         <div className="grid grid-cols-2 gap-8 z-10">
           <div className="flex flex-col gap-2">
             <ShieldCheck className="text-orange-500 w-6 h-6" />
-            <span className="text-white font-bold uppercase text-xs tracking-widest">Manual Audit</span>
+            <span className="text-white font-bold uppercase text-xs tracking-widest">Automatic Audit</span>
             <span className="text-zinc-500 text-sm">Every transaction is Automaticaly verified by our team.</span>
           </div>
           <div className="flex flex-col gap-2">
             <Zap className="text-orange-500 w-6 h-6" />
             <span className="text-white font-bold uppercase text-xs tracking-widest">Direct ETB</span>
-            <span className="text-zinc-500 text-sm">Convert your crypto directly to Telebirr or Bank.</span>
+            <span className="text-zinc-500 text-sm">Convert your USDT directly to any wallet.</span>
           </div>
         </div>
 
