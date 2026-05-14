@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useAuthStore } from '../store/authStore.ts';
-import { getImageUrl } from '../utils/imageUrl.ts';
+import { getImageUrl, loadImageAsBlob } from '../utils/imageUrl.ts';
 import { 
   Users, 
   ArrowRight, 
@@ -49,6 +49,7 @@ interface P2POrder {
   status: 'PENDING' | 'PAID' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
   paymentMethod?: string;
   paymentProof?: string;
+  proofId?: string;
   createdAt: string;
   merchant: {
     businessName: string;
@@ -105,12 +106,8 @@ export const P2PPage = () => {
       for (const order of orders) {
         if (order.proofId && !proofImages[order.id]) {
           try {
-            const response = await axios.get(`/api/p2p/orders/${order.id}/proof`, {
-              responseType: 'blob'
-            });
-            const blob = new Blob([response.data], { type: response.headers['content-type'] || 'image/jpeg' });
-            const url = URL.createObjectURL(blob);
-            setProofImages(prev => ({ ...prev, [order.id]: url }));
+            const blobUrl = await loadImageAsBlob(`/api/p2p/orders/${order.id}/proof`);
+            setProofImages(prev => ({ ...prev, [order.id]: blobUrl }));
           } catch (error) {
             console.error(`Failed to load proof for order ${order.id}:`, error);
           }
@@ -580,7 +577,7 @@ export const P2PPage = () => {
                                                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
                                             </div>
                                             <p className="text-white text-[10px] font-black uppercase italic">Payment Proof Attached</p>
-                                            <img src={orderProofs[order.id].preview} alt="Proof" className="w-20 h-20 object-cover rounded-lg mx-auto border border-zinc-800 mt-2" />
+                                            <img src={orderProofs[order.id]?.preview || ''} alt="Proof" className="w-20 h-20 object-cover rounded-lg mx-auto border border-zinc-800 mt-2" />
                                          </div>
                                        ) : (
                                          <div className="flex flex-col items-center gap-2">
