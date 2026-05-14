@@ -14,11 +14,11 @@ export const getImageUrl = (path: string | null) => {
   return `${normalizedBaseURL}${normalizedPath}`;
 };
 
-/**
- * Fetch image as a blob URL with proper authentication
- * Handles both authenticated endpoints (/api/p2p/orders/*/proof) and 
- * public endpoints (/uploads/*)
- */
+
+//  * Fetch image as a blob URL with proper authentication
+//  *// Handles both authenticated// endpoints (/api/p2p/orders/*/proof) and 
+//  *// public endpoints (/uploads/*) 
+
 export const loadImageAsBlob = async (imagePath: string | null): Promise<string> => {
   if (!imagePath) return '';
   if (imagePath.startsWith('data:')) return imagePath;
