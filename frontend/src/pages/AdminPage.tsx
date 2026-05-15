@@ -33,8 +33,9 @@ interface DepositRequest {
 
 interface WithdrawalRequest {
   id: string;
-  amountEtb: number;
-  destination: string;
+  amount: number;
+  walletAddress: string;
+  network: string;
   status: string;
   createdAt: string;
   user: {
@@ -565,8 +566,8 @@ export const AdminPage = () => {
                   </>
                 ) : (
                   <>
-                    <th className="px-8 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] italic">Amount (ETB)</th>
-                    <th className="px-8 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] italic">Destination</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] italic">Amount (USDT)</th>
+                    <th className="px-8 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] italic">Destination / Network</th>
                   </>
                 )}
                 <th className="px-8 py-4 text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em] italic text-right">Actions</th>
@@ -627,12 +628,15 @@ export const AdminPage = () => {
                       <p className="text-[10px] text-zinc-600 font-mono">{format(new Date(withd.createdAt), 'MMM dd, HH:mm')}</p>
                     </td>
                     <td className="px-8 py-6">
-                      <span className="text-md font-black text-orange-500 italic">{withd.amountEtb} ETB</span>
+                      <span className="text-md font-black text-orange-500 italic">{withd.amount} USDT</span>
                     </td>
                     <td className="px-8 py-6">
-                      <p className="text-xs text-zinc-400 max-w-[200px] truncate italic font-medium" title={withd.destination}>
-                        {withd.destination}
+                      <p className="text-xs text-zinc-400 max-w-[200px] truncate italic font-medium" title={withd.walletAddress}>
+                        {withd.walletAddress}
                       </p>
+                      <span className="text-[9px] font-black text-zinc-600 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 uppercase italic">
+                        {withd.network}
+                      </span>
                     </td>
                     <td className="px-8 py-6 text-right">
                       {withd.status === 'pending' ? (

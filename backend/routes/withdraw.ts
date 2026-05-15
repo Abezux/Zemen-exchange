@@ -17,44 +17,52 @@ router.get("/history", authenticate, async (req: AuthRequest, res: Response) => 
   }
 });
 
-// POST /withdraw/request
-router.post("/request", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
-  const { amountEtb, destination } = req.body;
+// POST /withdraw/usdt
+router.post("/usdt", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
+  const { amount, network, recipientAddress, fee, willReceive } = req.body;
 
-  if (!amountEtb || !destination) {
-    return res.status(400).json({ error: "amountEtb and destination are required" });
+  if (!amount || !recipientAddress || !network) {
+    return res.status(400).json({ error: "amount, network and recipientAddress are required" });
   }
 
-  const amount = parseFloat(amountEtb);
+  const usdtAmount = parseFloat(amount);
 
   try {
-    // 1. Get current rates
-    const settings = await prisma.globalSetting.findUnique({
-      where: { id: "singleton" }
-    });
-    
-    if (!settings) {
-      return res.status(500).json({ error: "System settings not configured" });
-    }
-
-    // 2. Calculate USDT equivalent
-    const usdtNeeded = amount / settings.sellRate;
-
-    // 3. Check USDT balance
+    // 1. Check USDT balance
     const wallet = await prisma.wallet.findUnique({
       where: { userId: req.user!.id }
     });
 
-    if (!wallet || wallet.balance < usdtNeeded) {
-      return res.status(400).json({ error: `Insufficient balance. You need ${usdtNeeded.toFixed(2)} USDT for this withdrawal.` });
+    if (!wallet || wallet.balance < usdtAmount) {
+      return res.status(400).json({ error: `Insufficient balance. You need ${usdtAmount.toFixed(2)} USDT for this withdrawal.` });
     }
+
+    // 2. Get current rates to store optional ETB value
+    const settings = await prisma.globalSetting.findUnique({
+      where: { id: "singleton" }
+    });
 
     const withdrawal = await prisma.withdrawalRequest.create({
       data: {
         userId: req.user!.id,
-        amountEtb: amount,
-        destination,
+        amount: usdtAmount,
+        walletAddress: recipientAddress,
+        network,
+        fee: parseFloat(fee) || 0,
+        amountEtb: settings ? usdtAmount * settings.sellRate : 0,
         status: "pending"
+      }
+    });
+
+    // Create a pending transaction record for the activity feed
+    await prisma.transaction.create({
+      data: {
+        userId: req.user!.id,
+        type: "withdrawal",
+        currency: "USDT",
+        amount: usdtAmount,
+        status: "pending",
+        referenceId: withdrawal.id
       }
     });
 
