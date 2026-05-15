@@ -144,14 +144,17 @@ model DepositRequest {
 }
 
 model WithdrawalRequest {
-  id          String    @id @default(cuid())
-  userId      String
-  user        User      @relation(fields: [userId], references: [id])
-  amountEtb   Float
-  destination String
-  status      String    @default("pending") // "pending", "paid", "rejected"
-  createdAt   DateTime  @default(now())
-  processedAt DateTime?
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  amount          Float
+  fee             Float     @default(0)
+  walletAddress   String
+  network         String    @default("TRC20")
+  amountEtb       Float?    // Keep for legacy/optional tracking
+  status          String    @default("pending") // "pending", "paid", "rejected"
+  createdAt       DateTime  @default(now())
+  processedAt     DateTime?
 }
 
 model Transaction {
