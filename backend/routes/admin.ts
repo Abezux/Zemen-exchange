@@ -102,27 +102,22 @@ router.post("/withdrawals/:id/pay", async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
 
   try {
-    const withdrawal = await prisma.withdrawalRequest.findUnique({
-      where: { id },
-      include: { user: { include: { wallet: true } } }
-    });
-
-    const settings = await prisma.globalSetting.findUnique({
-      where: { id: "singleton" }
-    });
-
-    if (!withdrawal || withdrawal.status !== "pending" || !settings) {
-      return res.status(400).json({ error: "Withdrawal not found, system error, or already processed" });
-    }
-
-    const usdtEquivalent = withdrawal.amountEtb / settings.sellRate;
-
-    if (!withdrawal.user.wallet || withdrawal.user.wallet.balance < usdtEquivalent) {
-      return res.status(400).json({ error: "User has insufficient USDT balance" });
-    }
-
-    // ATOMIC TRANSACTION: Update status + Deduct balance + Create transaction record
+    // ATOMIC TRANSACTION: Check status + Update status + Deduct balance + Create transaction record
     const result = await prisma.$transaction(async (tx) => {
+      const withdrawal = await tx.withdrawalRequest.findUnique({
+        where: { id },
+        include: { user: { include: { wallet: true } } }
+      });
+
+      if (!withdrawal) throw new Error("Withdrawal not found");
+      if (withdrawal.status !== "pending") throw new Error("Withdrawal already processed");
+
+      const amountToDeduct = withdrawal.amount; // USDT amount
+
+      if (!withdrawal.user.wallet || withdrawal.user.wallet.balance < amountToDeduct) {
+        throw new Error("User has insufficient USDT balance");
+      }
+
       await tx.withdrawalRequest.update({
         where: { id },
         data: {
@@ -134,26 +129,20 @@ router.post("/withdrawals/:id/pay", async (req: AuthRequest, res: Response) => {
       await tx.wallet.update({
         where: { userId: withdrawal.userId },
         data: {
-          balance: { decrement: usdtEquivalent }
+          balance: { decrement: amountToDeduct }
         }
       });
 
-      return tx.transaction.create({
-        data: {
-          userId: withdrawal.userId,
-          type: "withdrawal",
-          currency: "USDT",
-          amount: usdtEquivalent,
-          status: "completed",
-          referenceId: withdrawal.id
-        }
+      return tx.transaction.updateMany({
+        where: { referenceId: withdrawal.id },
+        data: { status: "completed" }
       });
     });
 
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Withdrawal pay error:", error);
-    res.status(500).json({ error: "Failed to process withdrawal" });
+    res.status(400).json({ error: error.message || "Failed to process withdrawal" });
   }
 });
 
@@ -359,11 +348,20 @@ router.get("/merchants", async (req: AuthRequest, res: Response) => {
 router.post("/withdrawals/:id/reject", async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
   try {
-    const withdrawal = await prisma.withdrawalRequest.update({
-      where: { id },
-      data: { status: "rejected" }
+    const result = await prisma.$transaction(async (tx) => {
+      const withdrawal = await tx.withdrawalRequest.update({
+        where: { id },
+        data: { status: "rejected" }
+      });
+
+      await tx.transaction.updateMany({
+        where: { referenceId: withdrawal.id },
+        data: { status: "rejected" }
+      });
+
+      return withdrawal;
     });
-    res.json(withdrawal);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: "Failed to reject withdrawal" });
   }
