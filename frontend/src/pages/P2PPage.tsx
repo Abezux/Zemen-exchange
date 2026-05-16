@@ -67,7 +67,8 @@ export const P2PPage = () => {
   const [showTradeModal, setShowTradeModal] = useState<Ad | null>(null);
   const [tradeAmount, setTradeAmount] = useState({ usdt: '', etb: '' });
   const [selectedPayment, setSelectedPayment] = useState('Telebirr');
-  const [proofFile, setProofFile] = useState<string | null>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
   
   const [merchantForm, setMerchantForm] = useState({
     businessName: '',
@@ -246,12 +247,18 @@ export const P2PPage = () => {
 
   const handleMarkPaid = async (orderId: string) => {
     try {
-      await axios.post(`/api/p2p/orders/${orderId}/paid`, {
-        paymentProof: proofFile
+      const formData = new FormData();
+      if (proofFile) {
+        formData.append('proof', proofFile);
+      }
+      
+      await axios.post(`/api/p2p/orders/${orderId}/paid`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
       alert('Order marked as paid! Waiting for seller release.');
       fetchOrders();
       setProofFile(null);
+      setProofPreview(null);
     } catch (error) {
        alert('Failed to mark as paid');
     }
@@ -272,9 +279,10 @@ export const P2PPage = () => {
   const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setProofFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setProofFile(reader.result as string);
+        setProofPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -539,7 +547,7 @@ export const P2PPage = () => {
                                                <CheckCircle2 className="w-8 h-8 text-emerald-500" />
                                             </div>
                                             <p className="text-white text-[10px] font-black uppercase italic">Payment Proof Attached</p>
-                                            <img src={proofFile} alt="Proof" className="w-20 h-20 object-cover rounded-lg mx-auto border border-zinc-800 mt-2" />
+                                            <img src={proofPreview || ''} alt="Proof" className="w-20 h-20 object-cover rounded-lg mx-auto border border-zinc-800 mt-2" />
                                          </div>
                                        ) : (
                                          <div className="flex flex-col items-center gap-2">
@@ -594,10 +602,13 @@ export const P2PPage = () => {
                                   <div className="bg-black/60 p-4 rounded-2xl border border-zinc-800">
                                      <p className="text-[10px] font-black text-zinc-500 uppercase italic mb-2 tracking-widest">Payment Proof Submission</p>
                                      <img 
-                                       src={order.paymentProof} 
+                                       src={order.paymentProof.startsWith('https') || order.paymentProof.startsWith('data:') ? order.paymentProof : `${axios.defaults.baseURL || ''}${order.paymentProof}`} 
                                        alt="Proof" 
                                        className="w-full h-48 object-cover rounded-xl cursor-pointer hover:opacity-80 transition-opacity" 
-                                       onClick={() => window.open(order.paymentProof, '_blank')}
+                                       onClick={() => {
+                                         const url = order.paymentProof?.startsWith('https') || order.paymentProof?.startsWith('data:') ? order.paymentProof : `${axios.defaults.baseURL || ''}${order.paymentProof}`;
+                                         window.open(url, '_blank');
+                                       }}
                                      />
                                   </div>
                                )}
