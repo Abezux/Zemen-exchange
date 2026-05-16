@@ -5,8 +5,24 @@
 import express, { Response } from "express";
 import { AuthRequest, authenticate, checkNotFrozen } from "../middleware/auth.ts";
 import prisma from "../lib/prisma.ts";
+import multer from "multer";
+import { uploadToCloudinary } from "../lib/cloudinary.ts";
 
 const router = express.Router();
+
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only JPG, PNG and WEBP images are allowed') as any, false);
+      }
+    }
+});
 
 // Helper to log actions
 async function logAction(userId: string, action: string, details?: any) {
@@ -337,12 +353,22 @@ router.get("/orders", authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-router.post("/orders/:id/paid", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
+router.post("/orders/:id/paid", authenticate, checkNotFrozen, upload.single("proof"), async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { paymentProof } = req.body;
   const userId = req.user!.id;
 
   try {
+    let paymentProof = req.body.paymentProof; // Fallback for legacy/manual if provided
+
+    if (req.file) {
+      try {
+        paymentProof = await uploadToCloudinary(req.file.buffer, 'p2p_proofs');
+      } catch (uploadError) {
+        console.error("Cloudinary upload failed:", uploadError);
+        return res.status(500).json({ error: "Failed to upload image to storage" });
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
       const order = await tx.p2POrder.findUnique({ where: { id } });
       if (!order) throw new Error("Order not found");
@@ -350,8 +376,6 @@ router.post("/orders/:id/paid", authenticate, checkNotFrozen, async (req: AuthRe
       // Strict Transition Rule: PENDING -> PAID
       if (order.status !== "PENDING") throw new Error("Invalid transition: Order must be PENDING to mark as PAID.");
 
-      const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchantId && (await tx.merchant.findUnique({where:{id: order.merchantId}}))?.userId === userId);
-      // Let's simplify check since merchantId is on order
       const merchant = await tx.merchant.findUnique({ where: { id: order.merchantId } });
       const isBuyerCheck = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && merchant?.userId === userId);
       
