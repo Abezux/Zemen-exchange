@@ -2,29 +2,23 @@ import { Router, Response } from "express";
 import { authenticate, AuthRequest } from "../middleware/auth.ts";
 import prisma from "../lib/prisma.ts";
 import multer from "multer";
-import path from "path";
-import fs from "fs";
+import { uploadToCloudinary } from "../lib/cloudinary.ts";
 
 const router = Router();
 
-// Setup multer for proof image uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = "./public/uploads";
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
-  },
-});
-
+// Setup multer for memory storage
+const storage = multer.memoryStorage();
 const upload = multer({ 
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only JPG, PNG and WEBP images are allowed') as any, false);
+      }
+    }
 });
 
 // GET /deposit/history
@@ -58,13 +52,23 @@ router.post("/submit", authenticate, upload.single("proof"), async (req: AuthReq
       return res.status(400).json({ error: "Transaction hash already submitted" });
     }
 
+    let proofImageUrl = null;
+    if (req.file) {
+      try {
+        proofImageUrl = await uploadToCloudinary(req.file.buffer, 'deposits');
+      } catch (uploadError) {
+        console.error("Cloudinary upload failed:", uploadError);
+        return res.status(500).json({ error: "Failed to upload image to storage" });
+      }
+    }
+
     const deposit = await prisma.depositRequest.create({
       data: {
         userId: req.user!.id,
         amount: parseFloat(amount),
         network: network || "TRC20",
         txHash,
-        proofImageUrl: req.file ? `/uploads/${req.file.filename}` : null,
+        proofImageUrl,
         status: "pending"
       }
     });

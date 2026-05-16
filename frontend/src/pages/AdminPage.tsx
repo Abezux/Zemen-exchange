@@ -669,7 +669,11 @@ export const AdminPage = () => {
               <X className="w-8 h-8" />
            </button>
            <div className="max-w-4xl max-h-[80vh] overflow-auto rounded-2xl shadow-2xl border border-zinc-800">
-             <img src={selectedImage} alt="Payment Proof" className="w-full h-auto object-contain" />
+             <img 
+               src={selectedImage.startsWith('http') || selectedImage.startsWith('data:') ? selectedImage : `${axios.defaults.baseURL || ''}${selectedImage}`} 
+               alt="Payment Proof" 
+               className="w-full h-auto object-contain" 
+             />
            </div>
            <p className="mt-8 text-zinc-500 italic font-medium">Verify transaction hash on TronScan before approval.</p>
         </div>
