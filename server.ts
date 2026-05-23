@@ -4,6 +4,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import http from "http";
+import { initSocket } from "./backend/lib/socket.ts";
 
 // Routes
 import authRoutes from "./backend/routes/auth.ts";
@@ -77,7 +79,10 @@ async function startServer() {
     res.json({ status: "ok", message: "API server is running" });
   });
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = http.createServer(app);
+  initSocket(server);
+
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
     
     // Import runExpiryCheck dynamically to avoid circular references and launch timer
