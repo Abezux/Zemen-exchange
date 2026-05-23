@@ -26,7 +26,7 @@ interface Transaction {
 }
 
 export const Dashboard = () => {
-  const { user, checkAuth } = useAuthStore();
+  const { user } = useAuthStore();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -58,111 +58,112 @@ export const Dashboard = () => {
   const etbEquivalent = (user?.wallet?.balance || 0) * (user?.settings?.sellRate || 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Rate Notification */}
       {user?.settings && (
-        <div className="flex gap-4">
-          <div className="flex-1 bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl flex items-center gap-4">
-             <div className="bg-emerald-500/10 p-2 rounded-lg text-emerald-500 text-xs font-bold uppercase italic">Buy Rate</div>
-             <div className="text-white font-black italic">{user.settings.buyRate} ETB</div>
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className="bg-zinc-900/50 border border-zinc-800 p-3 sm:p-4 rounded-2xl flex items-center gap-2 sm:gap-4">
+             <div className="bg-emerald-500/10 px-2 py-1 rounded-lg text-emerald-500 text-[10px] sm:text-xs font-bold uppercase italic">Buy Rate</div>
+             <div className="text-white font-black italic text-xs sm:text-base">{user.settings.buyRate} ETB</div>
           </div>
-          <div className="flex-1 bg-zinc-900/50 border border-zinc-800 p-4 rounded-2xl flex items-center gap-4">
-             <div className="bg-orange-500/10 p-2 rounded-lg text-orange-500 text-xs font-bold uppercase italic">Sell Rate</div>
-             <div className="text-white font-black italic">{user.settings.sellRate} ETB</div>
+          <div className="bg-zinc-900/50 border border-zinc-800 p-3 sm:p-4 rounded-2xl flex items-center gap-2 sm:gap-4">
+             <div className="bg-orange-500/10 p-2 rounded-lg text-orange-500 text-[10px] sm:text-xs font-bold uppercase italic">Sell Rate</div>
+             <div className="text-white font-black italic text-xs sm:text-base">{user.settings.sellRate} ETB</div>
           </div>
         </div>
       )}
 
       {/* Balance Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] relative overflow-hidden group shadow-xl"
+          className="bg-zinc-900 border border-zinc-800 p-5 sm:p-8 rounded-[1.5rem] sm:rounded-[2rem] relative overflow-hidden group shadow-xl"
         >
-          <div className="flex justify-between items-start mb-8">
-              <div className="space-y-4">
+          <div className="flex justify-between items-start mb-6 sm:mb-8">
+              <div className="space-y-3 sm:space-y-4">
                 <div>
-                  <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em] mb-1 italic">Available Balance</p>
-                  <h3 className="text-4xl font-black text-white italic tracking-tighter leading-none">
+                  <p className="text-zinc-500 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] mb-1 italic">Available Balance</p>
+                  <h3 className="text-3xl sm:text-4xl font-black text-white italic tracking-tighter leading-none">
                     ${user?.wallet?.balance?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </h3>
                 </div>
                 {user?.wallet?.lockedBalance ? (
-                  <div className="bg-orange-500/5 border border-orange-500/20 p-3 rounded-2xl flex items-center justify-between">
-                    <span className="text-[10px] font-black text-orange-500 uppercase italic tracking-widest">In Escrow / Locked</span>
-                    <span className="text-white font-black italic tracking-tight">${user.wallet.lockedBalance.toFixed(2)}</span>
+                  <div className="bg-orange-500/5 border border-orange-500/20 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex items-center justify-between gap-4">
+                    <span className="text-[9px] sm:text-[10px] font-black text-orange-500 uppercase italic tracking-widest">In Escrow / Locked</span>
+                    <span className="text-white font-black italic tracking-tight text-xs sm:text-sm">${user.wallet.lockedBalance.toFixed(2)}</span>
                   </div>
                 ) : null}
               </div>
-             <div className="bg-emerald-500/10 p-3 rounded-2xl">
-               <TrendingUp className="w-6 h-6 text-emerald-500" />
+             <div className="bg-emerald-500/10 p-2 sm:p-3 rounded-xl sm:rounded-2xl">
+               <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-500" />
              </div>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-3 sm:gap-4">
              <button 
                onClick={() => window.location.href = '/deposit'}
-               className="flex-1 bg-white text-black font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-zinc-200 transition-all uppercase tracking-tight italic"
+               className="flex-1 bg-white text-black font-bold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 hover:bg-zinc-200 transition-all uppercase tracking-tight italic"
              >
                <ArrowDownLeft className="w-4 h-4" /> Deposit
              </button>
              <button 
                onClick={() => window.location.href = '/p2p'}
-               className="flex-1 bg-zinc-800 text-white font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all uppercase tracking-tight italic border border-zinc-700"
+               className="flex-1 bg-zinc-800 text-white font-bold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 hover:bg-zinc-700 transition-all uppercase tracking-tight italic border border-zinc-700"
              >
                <Users className="w-4 h-4" /> P2P
              </button>
           </div>
-          <div className="absolute top-0 right-0 p-8 opacity-5 text-8xl font-black italic">USDT</div>
+          <div className="absolute top-0 right-0 p-4 sm:p-8 opacity-5 text-6xl sm:text-8xl font-black italic select-none pointer-events-none">USDT</div>
         </motion.div>
 
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] relative overflow-hidden group shadow-xl"
+          className="bg-zinc-900 border border-zinc-800 p-5 sm:p-8 rounded-[1.5rem] sm:rounded-[2rem] relative overflow-hidden group shadow-xl"
         >
-          <div className="flex justify-between items-start mb-8">
-             <div>
-               <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1">Estimated Value</p>
-               <h3 className="text-4xl font-black text-white italic tracking-tighter">
-                 {etbEquivalent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xl">ETB</span>
-               </h3>
-               <p className="text-zinc-400 text-xs mt-1 font-mono">Based on current sell rate</p>
-             </div>
-             <div className="bg-orange-500/10 p-3 rounded-2xl">
-               <WalletIcon className="w-6 h-6 text-orange-500" />
-             </div>
+          <div className="flex justify-between items-start mb-6 sm:mb-8">
+              <div>
+                <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest mb-1">Estimated Value</p>
+                <h3 className="text-3xl sm:text-4xl font-black text-white italic tracking-tighter leading-none font-sans">
+                  {etbEquivalent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-lg sm:text-xl">ETB</span>
+                </h3>
+                <p className="text-zinc-400 text-[10px] sm:text-xs mt-1 font-mono">Based on current sell rate</p>
+              </div>
+              <div className="bg-orange-500/10 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl">
+                <WalletIcon className="w-5 h-5 sm:w-6 sm:h-6 text-orange-500" />
+              </div>
           </div>
-          <div className="flex gap-4">
+          <div className="flex gap-3 sm:gap-4">
              <button 
                onClick={() => window.location.href = '/withdraw'}
-               className="flex-1 bg-orange-600 text-white font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-orange-700 transition-all uppercase tracking-tight italic"
+               className="flex-1 bg-orange-600 text-white font-bold py-3 px-4 rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 sm:gap-2 hover:bg-orange-700 transition-all uppercase tracking-tight italic"
              >
                <ArrowUpRight className="w-4 h-4" /> Withdraw
              </button>
           </div>
-          <div className="absolute top-0 right-0 p-8 opacity-5 text-8xl font-black italic">ETB</div>
+          <div className="absolute top-0 right-0 p-4 sm:p-8 opacity-5 text-6xl sm:text-8xl font-black italic select-none pointer-events-none">ETB</div>
         </motion.div>
       </div>
 
       {/* Transactions Section */}
-      <div className="bg-zinc-950 rounded-[2rem] border border-zinc-900 overflow-hidden shadow-2xl">
-        <div className="p-8 border-b border-zinc-900 flex justify-between items-center bg-zinc-900/10">
+      <div className="bg-zinc-950 rounded-[1.5rem] sm:rounded-[2rem] border border-zinc-900 overflow-hidden shadow-2xl">
+        <div className="p-5 sm:p-8 border-b border-zinc-900 flex justify-between items-center bg-zinc-900/10">
           <div className="flex items-center gap-3">
-             <History className="w-6 h-6 text-zinc-500" />
-             <h2 className="text-xl font-bold text-white tracking-tight italic uppercase">Recent Activity</h2>
+             <History className="w-5 h-5 sm:w-6 sm:h-6 text-zinc-500" />
+             <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight italic uppercase">Recent Activity</h2>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="border-b border-zinc-900 bg-zinc-900/5">
-                <th className="px-8 py-4 text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] italic">Date</th>
-                <th className="px-8 py-4 text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] italic">Type</th>
-                <th className="px-8 py-4 text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] italic">Amount</th>
-                <th className="px-8 py-4 text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] italic">Asset</th>
-                <th className="px-8 py-4 text-[10px] font-black text-zinc-600 uppercase tracking-[0.2em] italic">Status</th>
+                <th className="px-8 py-4 text-[10px] font-black text-zinc-650 uppercase tracking-[0.2em] italic">Date</th>
+                <th className="px-8 py-4 text-[10px] font-black text-zinc-650 uppercase tracking-[0.2em] italic">Type</th>
+                <th className="px-8 py-4 text-[10px] font-black text-zinc-650 uppercase tracking-[0.2em] italic">Amount</th>
+                <th className="px-8 py-4 text-[10px] font-black text-zinc-650 uppercase tracking-[0.2em] italic">Asset</th>
+                <th className="px-8 py-4 text-[10px] font-black text-zinc-650 uppercase tracking-[0.2em] italic">Status</th>
               </tr>
             </thead>
             <tbody>
@@ -199,13 +200,51 @@ export const Dashboard = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-8 py-16 text-center text-zinc-600 italic">
+                  <td colSpan={5} className="px-8 py-16 text-center text-zinc-650 italic">
                     No activity recorded yet.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Feed View */}
+        <div className="block md:hidden">
+          {transactions.length > 0 ? (
+            <div className="divide-y divide-zinc-900">
+              {transactions.map((tx) => (
+                <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-zinc-900/10 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-xl border ${tx.type === 'deposit' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' : 'bg-orange-500/10 border-orange-500/20 text-orange-400'}`}>
+                      {tx.type === 'deposit' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-white uppercase tracking-tight italic">
+                        {tx.type} <span className="text-[10px] text-zinc-400 font-mono bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800 ml-1 font-normal tracking-wide leading-none">{tx.currency}</span>
+                      </p>
+                      <p className="text-[9px] text-zinc-500 font-mono mt-0.5">
+                        {format(new Date(tx.createdAt), 'MMM dd, HH:mm')} • ID: {tx.id.substring(0, 6)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <span className={`text-xs font-black tracking-tight ${tx.type === 'deposit' ? 'text-emerald-500' : 'text-orange-500'}`}>
+                      {tx.type === 'deposit' ? '+' : '-'}{tx.amount.toLocaleString()}
+                    </span>
+                    <div className="flex items-center justify-end gap-1 text-[9px] text-zinc-400 font-bold capitalize">
+                      {getStatusIcon(tx.status)}
+                      <span>{tx.status}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="p-12 text-center text-zinc-600 italic text-sm">
+              No activity recorded yet.
+            </div>
+          )}
         </div>
       </div>
     </div>

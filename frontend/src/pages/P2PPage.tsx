@@ -20,7 +20,8 @@ import {
   ExternalLink,
   ChevronRight,
   Info,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -185,6 +186,7 @@ export const P2PPage = () => {
   const [type, setType] = useState<'SELL' | 'BUY'>('SELL');
   const [isLoading, setIsLoading] = useState(true);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   
   // Dynamic Filtering Hook States
   const [minPrice, setMinPrice] = useState('');
@@ -518,7 +520,8 @@ export const P2PPage = () => {
           </div>
           
           {/* Advanced P2P Matching & Search Filter Bar */}
-          <div className="bg-zinc-950 border border-zinc-850 p-6 rounded-[2rem] space-y-4">
+          {/* Desktop Filter Layout */}
+          <div className="hidden lg:block bg-zinc-950 border border-zinc-850 p-6 rounded-[2rem] space-y-4">
             <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
               <div className="flex items-center gap-2">
                 <Filter className="w-4 h-4 text-orange-500" />
@@ -539,7 +542,7 @@ export const P2PPage = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 text-xs">
+            <div className="grid grid-cols-6 gap-4 text-xs">
               {/* Payment Method Selector */}
               <div className="space-y-1.5 col-span-1">
                 <label className="text-zinc-500 font-bold block">Payment Option</label>
@@ -610,7 +613,7 @@ export const P2PPage = () => {
               </div>
 
               {/* Verified Badge and checkboxes */}
-              <div className="flex items-center gap-2 h-full pt-4 md:pt-5 col-span-1">
+              <div className="flex items-center gap-2 h-full pt-5 col-span-1">
                 <input 
                   type="checkbox"
                   id="verifiedOnlyCheckbox"
@@ -624,6 +627,188 @@ export const P2PPage = () => {
               </div>
             </div>
           </div>
+
+          {/* Mobile Filter Trigger Row */}
+          <div className="lg:hidden bg-zinc-950 border border-zinc-900 p-4 rounded-2xl flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-orange-500" />
+              <span className="text-xs font-black text-white uppercase italic tracking-wider">P2P Match Filter</span>
+            </div>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setIsMobileFilterOpen(true)}
+                className="bg-orange-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase italic tracking-tight flex items-center gap-1.5 shadow-md shadow-orange-600/10"
+              >
+                <span>Filter Ad Board</span>
+                {((minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (amountFilter ? 1 : 0) + (selectedPmFilter ? 1 : 0) + (sortBy !== 'best_match' ? 1 : 0) + (verifiedOnly ? 1 : 0)) > 0 && (
+                  <span className="bg-white text-orange-600 w-4 h-4 rounded-full flex items-center justify-center font-black text-[9px] leading-none shrink-0">
+                    {((minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (amountFilter ? 1 : 0) + (selectedPmFilter ? 1 : 0) + (sortBy !== 'best_match' ? 1 : 0) + (verifiedOnly ? 1 : 0))}
+                  </span>
+                )}
+              </button>
+              
+              {((minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (amountFilter ? 1 : 0) + (selectedPmFilter ? 1 : 0) + (sortBy !== 'best_match' ? 1 : 0) + (verifiedOnly ? 1 : 0)) > 0 && (
+                <button
+                  onClick={() => {
+                    setMinPrice('');
+                    setMaxPrice('');
+                    setAmountFilter('');
+                    setSelectedPmFilter('');
+                    setSortBy('best_match');
+                    setVerifiedOnly(false);
+                  }}
+                  className="bg-zinc-850 hover:bg-zinc-800 text-zinc-400 font-bold px-3 py-2 rounded-xl text-[10px] uppercase"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Mobile bottom-drawer sheet for filter panel */}
+          <AnimatePresence>
+            {isMobileFilterOpen && (
+              <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/85 backdrop-blur-sm lg:hidden">
+                {/* Backdrop Click */}
+                <div className="absolute inset-0" onClick={() => setIsMobileFilterOpen(false)} />
+                
+                {/* Drawer Body */}
+                <motion.div
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                  className="relative z-10 w-full bg-zinc-950 border-t border-zinc-800 rounded-t-[2rem] p-6 space-y-5 shadow-2xl overflow-y-auto max-h-[85vh] font-sans text-xs"
+                >
+                  {/* Top bar drag indicator visual */}
+                  <div className="w-12 h-1.5 bg-zinc-800 rounded-full mx-auto" onClick={() => setIsMobileFilterOpen(false)} />
+                  
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-900 mt-2">
+                    <div className="flex items-center gap-2">
+                      <Filter className="w-4 h-4 text-orange-500" />
+                      <h4 className="text-sm font-black text-white uppercase italic">Active Board Filtering</h4>
+                    </div>
+                    <button
+                      onClick={() => setIsMobileFilterOpen(false)}
+                      className="p-1.5 bg-zinc-900 border border-zinc-850 rounded-xl"
+                    >
+                      <X className="w-4 h-4 text-zinc-400" />
+                    </button>
+                  </div>
+
+                  {/* Payment option */}
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-500 font-bold uppercase tracking-wider block text-[9px]">Payment Option</label>
+                    <select 
+                      value={selectedPmFilter}
+                      onChange={(e) => setSelectedPmFilter(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white font-semibold focus:outline-none focus:border-orange-500 text-sm"
+                    >
+                      <option value="">All payment options</option>
+                      <option value="CBE">CBE (Commercial Bank)</option>
+                      <option value="TELEBIRR">Telebirr Wallet</option>
+                      <option value="ABYSSINIA">Bank of Abyssinia</option>
+                      <option value="DASHEN">Dashen Bank</option>
+                      <option value="AWASH">Awash Bank</option>
+                      <option value="CBE BIRR">CBE Birr Wallet</option>
+                    </select>
+                  </div>
+
+                  {/* Amount etb */}
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-500 font-bold uppercase tracking-wider block text-[9px]">Fiat Amount (ETB)</label>
+                    <input 
+                      type="number"
+                      placeholder="e.g. 5000"
+                      value={amountFilter}
+                      onChange={(e) => setAmountFilter(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white font-mono focus:outline-none focus:border-orange-500 text-sm"
+                    />
+                  </div>
+
+                  {/* Min Limit / Max Limit rates */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-zinc-500 font-bold uppercase tracking-wider block text-[9px]">Min Price (ETB)</label>
+                      <input 
+                        type="number"
+                        placeholder="Min Rate"
+                        value={minPrice}
+                        onChange={(e) => setMinPrice(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white font-mono focus:outline-none focus:border-orange-500 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-zinc-500 font-bold uppercase tracking-wider block text-[9px]">Max Price (ETB)</label>
+                      <input 
+                        type="number"
+                        placeholder="Max Rate"
+                        value={maxPrice}
+                        onChange={(e) => setMaxPrice(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white font-mono focus:outline-none focus:border-orange-500 text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sort By options */}
+                  <div className="space-y-1.5">
+                    <label className="text-zinc-500 font-bold uppercase tracking-wider block text-[9px]">Rank By</label>
+                    <select 
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white font-semibold focus:outline-none focus:border-orange-500 text-sm"
+                    >
+                      <option value="best_match">☆ Best Match (Scored)</option>
+                      <option value="price_asc">Price: Low to High</option>
+                      <option value="price_desc">Price: High to Low</option>
+                      <option value="liquidity_desc">Largest Liquidity</option>
+                    </select>
+                  </div>
+
+                  {/* Trust selection checkbox */}
+                  <div className="flex items-center gap-3 bg-zinc-900/40 p-3 rounded-xl border border-zinc-900 select-none">
+                    <input 
+                      type="checkbox"
+                      id="verifiedOnlyCheckboxMobile"
+                      checked={verifiedOnly}
+                      onChange={(e) => setVerifiedOnly(e.target.checked)}
+                      className="w-4 h-4 text-orange-600 bg-zinc-900 border-zinc-800 rounded focus:ring-orange-500 shrink-0"
+                    />
+                    <label htmlFor="verifiedOnlyCheckboxMobile" className="text-zinc-400 font-bold cursor-pointer uppercase text-[10px] tracking-wide block w-full py-1">
+                      Show Verified Trust Brokers Only
+                    </label>
+                  </div>
+
+                  <div className="flex gap-3 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMinPrice('');
+                        setMaxPrice('');
+                        setAmountFilter('');
+                        setSelectedPmFilter('');
+                        setSortBy('best_match');
+                        setVerifiedOnly(false);
+                        setIsMobileFilterOpen(false);
+                      }}
+                      className="flex-1 py-3.5 bg-zinc-900 border border-zinc-800 text-zinc-400 rounded-xl font-bold uppercase"
+                    >
+                      Reset All
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileFilterOpen(false)}
+                      className="flex-1 py-3.5 bg-orange-600 text-white rounded-xl font-black uppercase italic shadow-lg shadow-orange-600/10"
+                    >
+                      Apply Filters
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
           {/* Marketplace Content */}
           <div className="space-y-4">
@@ -645,55 +830,53 @@ export const P2PPage = () => {
                     const userMethods = userEnabledPMs.map(m => m.bankName.trim().toUpperCase());
                     const matchedMethods = adMethods.filter(method => userMethods.includes(method));
                     const hasMatchedMethod = matchedMethods.length > 0;
-                    const isMerchantVerified = ad.merchant.user.verificationStatus === "verified";
-
-                    return (
+                    const isMerchantVerified = ad.merchant.user.verificationStatus === "verified";                     return (
                       <motion.div 
                         key={ad.id}
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`border p-6 rounded-3xl transition-all group ${
+                        className={`border p-4 sm:p-6 rounded-2xl sm:rounded-3xl transition-all group ${
                           hasMatchedMethod 
                             ? 'bg-orange-950/10 border-orange-500/20 hover:border-orange-500/40 shadow-md shadow-orange-950/5' 
                             : 'bg-zinc-900/40 border-zinc-800/60 hover:border-zinc-700'
                         }`}
                       >
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                          <div className="flex items-center gap-4">
-                             <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center font-black text-orange-500 italic text-xl border border-zinc-800">
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 sm:gap-6">
+                          <div className="flex items-center gap-3 sm:gap-4">
+                             <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/5 rounded-xl sm:rounded-2xl flex items-center justify-center font-black text-orange-500 italic text-lg sm:text-xl border border-zinc-800">
                                {ad.merchant.businessName.charAt(0)}
                              </div>
                              <div>
-                               <h4 className="text-white font-black italic uppercase tracking-tight flex items-center gap-2">
-                                 {ad.merchant.businessName}
+                               <h4 className="text-sm sm:text-base text-white font-black italic uppercase tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-2">
+                                 <span>{ad.merchant.businessName}</span>
                                  {isMerchantVerified ? (
-                                   <span className="bg-emerald-500/10 text-emerald-500 text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1 font-extrabold uppercase tracking-wide">
+                                   <span className="bg-emerald-500/10 text-emerald-500 text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1 font-extrabold uppercase tracking-wide leading-none">
                                      ✓ Verified Broker
                                    </span>
                                  ) : (
-                                   <span className="bg-zinc-900 text-zinc-500 text-[8px] px-1.5 py-0.5 rounded border border-zinc-850">
+                                   <span className="bg-zinc-900 text-zinc-500 text-[8px] px-1.5 py-0.5 rounded border border-zinc-850 leading-none">
                                      Standard Member
                                    </span>
                                  )}
                                </h4>
-                               <p className="text-zinc-500 text-xs font-medium">98.5% Completion • 12min Avg</p>
+                               <p className="text-zinc-500 text-[10px] sm:text-xs font-semibold">98.5% Completion • 12min Avg</p>
                              </div>
                           </div>
 
-                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-8 w-full md:w-auto">
+                          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full lg:w-auto">
                              <div>
-                               <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Price</p>
-                               <h5 className="text-xl font-black text-white italic tracking-tighter leading-none">{ad.price} <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">ETB</span></h5>
+                               <p className="text-[9px] sm:text-[10px] font-bold text-zinc-650 uppercase tracking-widest mb-0.5 italic">Price</p>
+                               <h5 className="text-lg sm:text-xl font-black text-white italic tracking-tighter leading-none">{ad.price} <span className="text-[9px] sm:text-[10px] text-zinc-500 font-bold uppercase tracking-wide">ETB</span></h5>
                              </div>
                              <div>
-                               <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Available</p>
-                               <h5 className="text-sm font-black text-zinc-300 italic tracking-tight">{ad.remainingAmount.toFixed(2)} USDT</h5>
-                               <p className="text-[10px] text-zinc-500 font-mono italic">Limits: {ad.minLimit}-{ad.maxLimit} ETB</p>
+                               <p className="text-[9px] sm:text-[10px] font-bold text-zinc-650 uppercase tracking-widest mb-0.5 italic">Available</p>
+                               <h5 className="text-xs sm:text-sm font-black text-zinc-350 italic tracking-tight">{ad.remainingAmount.toFixed(2)} USDT</h5>
+                               <p className="text-[9px] sm:text-[10px] text-zinc-500 font-mono italic">Limits: {ad.minLimit}-{ad.maxLimit} ETB</p>
                              </div>
-                             <div className="col-span-2 lg:col-span-1 flex items-center">
+                             <div className="col-span-2 sm:col-span-2 lg:col-span-1 flex items-center pt-1 sm:pt-0">
                                <button 
                                   onClick={() => setShowTradeModal(ad)}
-                                  className={`w-full lg:w-40 py-3 rounded-xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 ${
+                                  className={`w-full lg:w-40 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 text-xs sm:text-sm ${
                                     type === 'SELL' 
                                       ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/10' 
                                       : 'bg-white text-black hover:bg-zinc-200'
@@ -707,16 +890,16 @@ export const P2PPage = () => {
 
                         {/* Payment Options Row */}
                         <div className="mt-4 pt-3 border-t border-zinc-900/40 flex flex-wrap items-center gap-2 select-none">
-                          <span className="text-[10px] text-zinc-500 uppercase font-black italic mr-1">Settlement Channels:</span>
+                          <span className="text-[9px] sm:text-[10px] text-zinc-550 uppercase font-black italic mr-1">Settlement Channels:</span>
                           {adMethods.length === 0 ? (
-                            <span className="text-[10px] text-zinc-600 font-bold">Seller did not specify option</span>
+                            <span className="text-[9px] text-zinc-600 font-semibold">Seller did not specify option</span>
                           ) : (
                             adMethods.map((method, index) => {
                               const isMatched = userMethods.includes(method);
                               return (
                                 <span 
                                   key={index} 
-                                  className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
+                                  className={`px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-bold uppercase tracking-wide border ${
                                     isMatched 
                                       ? 'bg-emerald-600/15 text-emerald-400 border-emerald-500/30 font-extrabold' 
                                       : 'bg-zinc-850/60 text-zinc-500 border-zinc-850'
@@ -729,8 +912,8 @@ export const P2PPage = () => {
                           )}
 
                           {hasMatchedMethod && (
-                            <div className="ml-auto text-emerald-400 font-black italic uppercase tracking-wider text-[9px] bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5 animate-pulse">
-                              <Sparkles className="w-3 h-3" /> MATCHED FOR YOU
+                            <div className="ml-auto text-emerald-400 font-black italic uppercase tracking-wider text-[8px] sm:text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-1 animate-pulse select-none">
+                              <Sparkles className="w-2.5 h-2.5" /> MATCHED FOR YOU
                             </div>
                           )}
                         </div>
