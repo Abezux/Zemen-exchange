@@ -79,6 +79,14 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    
+    // Import runExpiryCheck dynamically to avoid circular references and launch timer
+    import("./backend/routes/p2p.ts").then(({ runExpiryCheck }) => {
+      console.log("[P2P Server Initializer] Starting auto-expiry monitor (Interval: 15s)");
+      setInterval(runExpiryCheck, 15000);
+    }).catch(err => {
+      console.error("[P2P Server Initializer] Failed to initialize P2P monitor:", err);
+    });
   });
 }
 

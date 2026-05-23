@@ -55,6 +55,7 @@ enum P2PStatus {
   COMPLETED
   CANCELLED
   DISPUTED
+  EXPIRED
 }
 
 enum MerchantStatus {
@@ -112,6 +113,11 @@ model P2POrder {
   idempotencyKey String?   @unique
   createdAt      DateTime  @default(now())
   completedAt    DateTime?
+  expiresAt      DateTime?
+  paidAt         DateTime?
+  releasedAt     DateTime?
+  cancelledAt    DateTime?
+  disputedAt     DateTime?
 }
 
 model AuditLog {
