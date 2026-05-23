@@ -7,6 +7,7 @@ import { DepositPage } from './pages/DepositPage.tsx';
 import { WithdrawPage } from './pages/WithdrawPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { P2PPage } from './pages/P2PPage.tsx';
+import { ProfilePage } from './pages/ProfilePage.tsx';
 import { useAuthStore } from './store/authStore.ts';
 
 const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: string }) => {
@@ -51,6 +52,11 @@ export default function App() {
           <Route path="/p2p" element={
             <ProtectedRoute>
               <P2PPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           } />
           <Route path="/admin" element={

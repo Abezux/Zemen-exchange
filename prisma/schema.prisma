@@ -16,9 +16,14 @@ model User {
   name               String?
   role               String              @default("USER") // "USER" or "ADMIN"
   isFrozen           Boolean             @default(false)
+  avatarUrl          String?
+  bio                String?
+  verificationStatus String              @default("unverified") // "unverified", "pending", "verified"
+  accountType        String              @default("user") // "user", "merchant"
   createdAt          DateTime            @default(now())
   wallet             Wallet?
   merchant           Merchant?
+  paymentMethods     UserPaymentMethod[]
   p2pOrders          P2POrder[]         @relation("UserOrders")
   auditLogs          AuditLog[]
   depositRequests    DepositRequest[]
@@ -92,6 +97,7 @@ model P2PAd {
   maxLimit        Float      // Max ETB per trade
   price           Float      // ETB/USDT rate
   status          AdStatus   @default(ACTIVE)
+  paymentMethods  String     @default("") // Comma-separated banks like "CBE,Telebirr"
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
   orders          P2POrder[]
@@ -196,4 +202,17 @@ model PushToken {
   token     String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model UserPaymentMethod {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankName      String   // e.g. "CBE", "Telebirr", "Bank of Abyssinia"
+  accountName   String
+  accountNumber String
+  isDefault     Boolean  @default(false)
+  isEnabled     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

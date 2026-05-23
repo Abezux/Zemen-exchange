@@ -8,6 +8,7 @@ import prisma from "../lib/prisma.ts";
 import multer from "multer";
 import { uploadToCloudinary } from "../lib/cloudinary.ts";
 import { sendNotification } from "../lib/notification.ts";
+import jwt from "jsonwebtoken";
 
 const router = express.Router();
 
@@ -70,17 +71,190 @@ router.post("/merchant/apply", authenticate, async (req: AuthRequest, res: Respo
 });
 
 /**
- * 2. Marketplace & Liquidity Retrieval
+ * 2. Marketplace & Liquidity Retrieval (with Advanced Prefiltering & Multi-tier Ranking)
  */
+async function getFilteredAndRankedAds(filters: any, currentUserId?: string) {
+  const { 
+    type, 
+    minPrice, 
+    maxPrice, 
+    amount, 
+    paymentMethods, 
+    sortBy, 
+    verifiedOnly 
+  } = filters;
+
+  const conditions: any = {
+    status: "ACTIVE",
+    remainingAmount: { gt: 0 }
+  };
+
+  if (type === "BUY" || type === "SELL") {
+    conditions.type = type;
+  }
+
+  // Price range filters
+  if (minPrice !== undefined && minPrice !== null && minPrice !== "") {
+    const minP = parseFloat(minPrice);
+    if (!isNaN(minP)) {
+      conditions.price = { ...conditions.price, gte: minP };
+    }
+  }
+  if (maxPrice !== undefined && maxPrice !== null && maxPrice !== "") {
+    const maxP = parseFloat(maxPrice);
+    if (!isNaN(maxP)) {
+      conditions.price = { ...conditions.price, lte: maxP };
+    }
+  }
+
+  // Pre-filter on amount limits (minLimit / maxLimit)
+  if (amount !== undefined && amount !== null && amount !== "") {
+    const amt = parseFloat(amount);
+    if (!isNaN(amt)) {
+      conditions.minLimit = { lte: amt };
+      conditions.maxLimit = { gte: amt };
+    }
+  }
+
+  // Pre-filter on verified only condition
+  if (verifiedOnly === "true" || verifiedOnly === true) {
+    conditions.merchant = {
+      user: {
+        verificationStatus: "verified"
+      }
+    };
+  }
+
+  let ads = await prisma.p2PAd.findMany({
+    where: conditions,
+    include: {
+      merchant: {
+        include: {
+          user: {
+            include: {
+              paymentMethods: {
+                where: { isEnabled: true }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  // Determine Target Payment Methods for intersection filtering
+  let targetMethods: string[] = [];
+  if (paymentMethods) {
+    if (Array.isArray(paymentMethods)) {
+      targetMethods = paymentMethods.map((p: string) => p.trim().toUpperCase());
+    } else if (typeof paymentMethods === "string" && paymentMethods.trim() !== "") {
+      targetMethods = paymentMethods.split(",").map((p: string) => p.trim().toUpperCase());
+    }
+  } else if (currentUserId) {
+    // If no explicit search payment method is specified, default to the user's enabled ones!
+    const userMethods = await prisma.userPaymentMethod.findMany({
+      where: { userId: currentUserId, isEnabled: true }
+    });
+    targetMethods = userMethods.map(m => m.bankName.trim().toUpperCase());
+  }
+
+  // 1. Post-Filter on Payment Methods Intersection
+  if (targetMethods.length > 0) {
+    ads = ads.filter(ad => {
+      const adMethods = ad.paymentMethods ? ad.paymentMethods.split(",").map(p => p.trim().toUpperCase()) : [];
+      // Intersection check: must match at least one method
+      return adMethods.some(method => targetMethods.includes(method));
+    });
+  }
+
+  // 2. Sorting & Ranking Implementation
+  if (sortBy === "price_asc") {
+    ads.sort((a, b) => a.price - b.price);
+  } else if (sortBy === "price_desc") {
+    ads.sort((a, b) => b.price - a.price);
+  } else if (sortBy === "liquidity_desc") {
+    ads.sort((a, b) => b.remainingAmount - a.remainingAmount);
+  } else {
+    // Default / "best_match" ranking:
+    // 1. Payment Method Compatibility strength (highest intersection count)
+    // 2. Best Price Advantage (SELL: lowest price first; BUY: highest price first)
+    // 3. Liquidity (highest remainingAmount first)
+    // 4. Verification state (verified first)
+    ads.sort((a, b) => {
+      // 1. Payment intersection count
+      if (targetMethods.length > 0) {
+        const aMethods = a.paymentMethods ? a.paymentMethods.split(",").map(p => p.trim().toUpperCase()) : [];
+        const bMethods = b.paymentMethods ? b.paymentMethods.split(",").map(p => p.trim().toUpperCase()) : [];
+        const aCount = aMethods.filter(p => targetMethods.includes(p)).length;
+        const bCount = bMethods.filter(p => targetMethods.includes(p)).length;
+        if (aCount !== bCount) {
+          return bCount - aCount; // Highest count first
+        }
+      }
+
+      // 2. Best Price Advantage
+      if (a.price !== b.price) {
+        if (a.type === "SELL") {
+          return a.price - b.price; // Lowest price first
+        } else {
+          return b.price - a.price; // Highest price first
+        }
+      }
+
+      // 3. Liquidity
+      if (a.remainingAmount !== b.remainingAmount) {
+        return b.remainingAmount - a.remainingAmount; // Highest remaining amount first
+      }
+
+      // 4. Verification trust status
+      const aVerified = a.merchant.user.verificationStatus === "verified" ? 1 : 0;
+      const bVerified = b.merchant.user.verificationStatus === "verified" ? 1 : 0;
+      return bVerified - aVerified;
+    });
+  }
+
+  return ads;
+}
+
+// GET /api/p2p/ads
 router.get("/ads", async (req, res) => {
   try {
-    const ads = await prisma.p2PAd.findMany({
-      where: { status: "ACTIVE", remainingAmount: { gt: 0 } },
-      include: { merchant: { include: { user: true } } }
-    });
+    let userId: string | undefined;
+    if (req.cookies?.token) {
+      try {
+        const decoded = jwt.verify(req.cookies.token, process.env.JWT_SECRET || "super-secret-key-123") as any;
+        userId = decoded?.id;
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const ads = await getFilteredAndRankedAds(req.query, userId);
     res.json(ads);
-  } catch (error) {
-    res.status(500).json({ error: "Fetch failed" });
+  } catch (error: any) {
+    console.error("[P2P Ads Fetch Error]", error);
+    res.status(500).json({ error: error.message || "Fetch failed" });
+  }
+});
+
+// POST /api/p2p/ads/search
+router.post("/ads/search", async (req, res) => {
+  try {
+    let userId: string | undefined;
+    if (req.cookies?.token) {
+      try {
+        const decoded = jwt.verify(req.cookies.token, process.env.JWT_SECRET || "super-secret-key-123") as any;
+        userId = decoded?.id;
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    const ads = await getFilteredAndRankedAds(req.body, userId);
+    res.json(ads);
+  } catch (error: any) {
+    console.error("[P2P Ads Search Error]", error);
+    res.status(500).json({ error: error.message || "Search failed" });
   }
 });
 
@@ -102,7 +276,7 @@ router.get("/my-ads", authenticate, async (req: AuthRequest, res: Response) => {
  * 3. Atomic Ad Creation (SELL ads lock funds immediately)
  */
 router.post("/ads", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
-  const { type, amount, minLimit, maxLimit, price } = req.body;
+  const { type, amount, minLimit, maxLimit, price, paymentMethods } = req.body;
   const userId = req.user!.id;
   const numAmount = Math.max(0, parseFloat(amount));
   const numPrice = parseFloat(price);
@@ -149,7 +323,8 @@ router.post("/ads", authenticate, checkNotFrozen, async (req: AuthRequest, res: 
           remainingAmount: numAmount,
           minLimit: parseFloat(minLimit),
           maxLimit: parseFloat(maxLimit),
-          price: numPrice
+          price: numPrice,
+          paymentMethods: Array.isArray(paymentMethods) ? paymentMethods.join(",") : (paymentMethods || "")
         }
       });
     });
@@ -166,7 +341,7 @@ router.post("/ads", authenticate, checkNotFrozen, async (req: AuthRequest, res: 
  */
 router.put("/ads/:id", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { price, minLimit, maxLimit, amount } = req.body;
+  const { price, minLimit, maxLimit, amount, paymentMethods } = req.body;
   const userId = req.user!.id;
 
   try {
@@ -222,6 +397,10 @@ router.put("/ads/:id", authenticate, checkNotFrozen, async (req: AuthRequest, re
         } else if (updates.remainingAmount <= 0.0001 && ad.status === "ACTIVE") {
           updates.status = "EXPIRED";
         }
+      }
+
+      if (paymentMethods !== undefined) {
+        updates.paymentMethods = Array.isArray(paymentMethods) ? paymentMethods.join(",") : (paymentMethods || "");
       }
 
       return await tx.p2PAd.update({

@@ -5,11 +5,16 @@ import axios from 'axios';
 axios.defaults.baseURL = import.meta.env.VITE_API_URL || '';
 axios.defaults.withCredentials = true;
 
-interface User {
+export interface User {
   id: string;
   email: string;
   name: string;
   role: string;
+  avatarUrl?: string;
+  bio?: string;
+  verificationStatus?: string; // "unverified" | "pending" | "verified"
+  accountType?: string; // "user" | "merchant"
+  paymentMethods?: any[];
   wallet?: {
     balance: number;
     lockedBalance: number;
@@ -30,10 +35,11 @@ interface AuthState {
   isLoading: boolean;
   setUser: (user: User | null) => void;
   checkAuth: () => Promise<void>;
+  updateProfile: (data: FormData | { name?: string; bio?: string; avatarUrl?: string; verificationStatus?: string; accountType?: string }) => Promise<User>;
   logout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
@@ -47,6 +53,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     } catch (error) {
       set({ user: null, isAuthenticated: false, isLoading: false });
     }
+  },
+  updateProfile: async (data) => {
+    let response;
+    if (data instanceof FormData) {
+      response = await axios.patch('/api/user/profile', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    } else {
+      response = await axios.patch('/api/user/profile', data);
+    }
+    const updatedUser = response.data;
+    set({ user: updatedUser });
+    return updatedUser;
   },
   logout: async () => {
     try {
