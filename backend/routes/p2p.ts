@@ -7,6 +7,7 @@ import { AuthRequest, authenticate, checkNotFrozen } from "../middleware/auth.ts
 import prisma from "../lib/prisma.ts";
 import multer from "multer";
 import { uploadToCloudinary } from "../lib/cloudinary.ts";
+import { sendNotification } from "../lib/notification.ts";
 
 const router = express.Router();
 
@@ -332,6 +333,46 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
     });
 
     await logAction(buyerId, "P2P_ORDER_CREATED", { orderId: result.id });
+
+    // Notify participants in real-time
+    const isSellAd = result.type === "SELL";
+    const formattedQty = qty.toFixed(2);
+    const formattedFiat = fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    if (isSellAd) {
+      // Creator is BUYER, Merchant is SELLER
+      await sendNotification(
+        buyerId,
+        "ORDER_CREATED",
+        "P2P Buy Order Initiated",
+        `Your buy order #${result.id.slice(-6)} for ${formattedQty} USDT is active. Please pay ${formattedFiat} ETB.`,
+        { orderId: result.id, role: "BUYER" }
+      );
+      await sendNotification(
+        result.merchant.userId,
+        "ORDER_CREATED",
+        "New P2P Sell Order Received",
+        `A buyer has opened order #${result.id.slice(-6)} to purchase ${formattedQty} USDT for ${formattedFiat} ETB.`,
+        { orderId: result.id, role: "SELLER" }
+      );
+    } else {
+      // Creator is SELLER, Merchant is BUYER
+      await sendNotification(
+        buyerId,
+        "ORDER_CREATED",
+        "P2P Sell Order Locked",
+        `Your sell order #${result.id.slice(-6)} for ${formattedQty} USDT is locked in Escrow. Wait for the buyer's payment.`,
+        { orderId: result.id, role: "SELLER" }
+      );
+      await sendNotification(
+        result.merchant.userId,
+        "ORDER_CREATED",
+        "New P2P Buy Order Received",
+        `You have an active order #${result.id.slice(-6)} to buy ${formattedQty} USDT. Please pay ${formattedFiat} ETB to matching seller.`,
+        { orderId: result.id, role: "BUYER" }
+      );
+    }
+
     res.json(result);
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -370,15 +411,17 @@ router.post("/orders/:id/paid", authenticate, checkNotFrozen, upload.single("pro
       }
     }
 
-    await prisma.$transaction(async (tx) => {
-      const order = await tx.p2POrder.findUnique({ where: { id } });
+    const result = await prisma.$transaction(async (tx) => {
+      const order = await tx.p2POrder.findUnique({ 
+        where: { id },
+        include: { merchant: true }
+      });
       if (!order) throw new Error("Order not found");
       
       // Strict Transition Rule: PENDING -> PAID
       if (order.status !== "PENDING") throw new Error("Invalid transition: Order must be PENDING to mark as PAID.");
 
-      const merchant = await tx.merchant.findUnique({ where: { id: order.merchantId } });
-      const isBuyerCheck = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && merchant?.userId === userId);
+      const isBuyerCheck = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchant.userId === userId);
       
       if (!isBuyerCheck) throw new Error("Only the buyer can confirm payment.");
 
@@ -387,7 +430,29 @@ router.post("/orders/:id/paid", authenticate, checkNotFrozen, upload.single("pro
         data: { status: "PAID", paymentProof, paidAt: new Date() }
       });
       if (update.count === 0) throw new Error("Race condition: Order state changed.");
+
+      return order;
     });
+
+    const buyerId = result.type === "SELL" ? result.creatorId : result.merchant.userId;
+    const sellerId = result.type === "SELL" ? result.merchant.userId : result.creatorId;
+
+    await sendNotification(
+      buyerId,
+      "ORDER_PAID",
+      "P2P Order Marked Paid",
+      `You marked order #${result.id.slice(-6)} as PAID. The seller has been requested to inspect payment and release USDT.`,
+      { orderId: result.id, role: "BUYER" }
+    );
+
+    await sendNotification(
+      sellerId,
+      "ORDER_PAID",
+      "P2P Payment Confirmation Received",
+      `The buyer of order #${result.id.slice(-6)} has submitted payment proof. Please verify receipt and release the escrow USDT.`,
+      { orderId: result.id, role: "SELLER" }
+    );
+
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -400,7 +465,7 @@ router.post("/orders/:id/release", authenticate, checkNotFrozen, async (req: Aut
   const isAdmin = req.user!.role === "ADMIN";
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const order = await tx.p2POrder.findUnique({ 
         where: { id }, 
         include: { merchant: { include: { user: true } } } 
@@ -438,7 +503,29 @@ router.post("/orders/:id/release", authenticate, checkNotFrozen, async (req: Aut
         where: { userId: payeeId },
         data: { balance: { increment: order.amountUsdt } }
       });
+
+      return order;
     });
+
+    const buyerId = result.type === "SELL" ? result.creatorId : result.merchant.userId;
+    const sellerId = result.type === "SELL" ? result.merchant.userId : result.creatorId;
+
+    await sendNotification(
+      buyerId,
+      "ORDER_RELEASED",
+      "P2P Escrow Released! 🚀",
+      `The seller has released ${result.amountUsdt.toFixed(2)} USDT. Funds are now available in your wallet.`,
+      { orderId: result.id, role: "BUYER" }
+    );
+
+    await sendNotification(
+      sellerId,
+      "ORDER_RELEASED",
+      "P2P Order Completed Successfully",
+      `You released ${result.amountUsdt.toFixed(2)} USDT for order #${result.id.slice(-6)}. Escrow locked balance updated.`,
+      { orderId: result.id, role: "SELLER" }
+    );
+
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -451,7 +538,7 @@ router.post("/orders/:id/cancel", authenticate, checkNotFrozen, async (req: Auth
   const isAdmin = req.user!.role === "ADMIN";
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const order = await tx.p2POrder.findUnique({ 
         where: { id }, 
         include: { merchant: { include: { user: true } } } 
@@ -503,7 +590,29 @@ router.post("/orders/:id/cancel", authenticate, checkNotFrozen, async (req: Auth
           }
         });
       }
+
+      return order;
     });
+
+    const buyerId = result.type === "SELL" ? result.creatorId : result.merchant.userId;
+    const sellerId = result.type === "SELL" ? result.merchant.userId : result.creatorId;
+
+    await sendNotification(
+      buyerId,
+      "ORDER_CANCELLED",
+      "P2P Order Cancelled",
+      `Order #${result.id.slice(-6)} has been cancelled. Any locked balances have been refunded.`,
+      { orderId: result.id, role: "BUYER" }
+    );
+
+    await sendNotification(
+      sellerId,
+      "ORDER_CANCELLED",
+      "P2P Order Cancelled",
+      `Order #${result.id.slice(-6)} has been cancelled. Escrow locked crypto has been restored.`,
+      { orderId: result.id, role: "SELLER" }
+    );
+
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -516,7 +625,7 @@ router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: Aut
   const userId = req.user!.id;
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const order = await tx.p2POrder.findUnique({ 
         where: { id },
         include: { merchant: true }
@@ -536,7 +645,29 @@ router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: Aut
         data: { status: "DISPUTED", disputeReason: reason, disputedAt: new Date() }
       });
       if (update.count === 0) throw new Error("Race condition: Order state changed.");
+
+      return order;
     });
+
+    const buyerId = result.type === "SELL" ? result.creatorId : result.merchant.userId;
+    const sellerId = result.type === "SELL" ? result.merchant.userId : result.creatorId;
+
+    await sendNotification(
+      buyerId,
+      "ORDER_DISPUTED",
+      "P2P Conflict: Dispute Opened ⚠️",
+      `A support dispute has been submitted for trade #${result.id.slice(-6)}. Zemen desk is reviewing payment proofs.`,
+      { orderId: result.id, reason }
+    );
+
+    await sendNotification(
+      sellerId,
+      "ORDER_DISPUTED",
+      "P2P Conflict: Dispute Opened ⚠️",
+      `A support dispute has been submitted for trade #${result.id.slice(-6)}. Zemen desk is reviewing payment proofs.`,
+      { orderId: result.id, reason }
+    );
+
     res.json({ success: true });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
@@ -560,13 +691,14 @@ export async function runExpiryCheck() {
 
     for (const order of expiredOrders) {
       try {
-        await prisma.$transaction(async (tx) => {
-          const freshOrder = await tx.p2POrder.findUnique({
-            where: { id: order.id }
+        const freshOrder = await prisma.$transaction(async (tx) => {
+          const innerFreshOrder = await tx.p2POrder.findUnique({
+            where: { id: order.id },
+            include: { merchant: true }
           });
 
-          if (!freshOrder || freshOrder.status !== "PENDING") {
-            return;
+          if (!innerFreshOrder || innerFreshOrder.status !== "PENDING") {
+            return null;
           }
 
           const update = await tx.p2POrder.updateMany({
@@ -574,20 +706,20 @@ export async function runExpiryCheck() {
             data: { status: "EXPIRED" }
           });
 
-          if (update.count === 0) return;
+          if (update.count === 0) return null;
 
-          if (freshOrder.type === "BUY") {
+          if (innerFreshOrder.type === "BUY") {
             await tx.wallet.update({
-              where: { userId: freshOrder.creatorId },
-              data: { balance: { increment: freshOrder.amountUsdt }, lockedBalance: { decrement: freshOrder.amountUsdt } }
+              where: { userId: innerFreshOrder.creatorId },
+              data: { balance: { increment: innerFreshOrder.amountUsdt }, lockedBalance: { decrement: innerFreshOrder.amountUsdt } }
             });
           }
 
-          const ad = await tx.p2PAd.findUnique({ where: { id: freshOrder.adId } });
+          const ad = await tx.p2PAd.findUnique({ where: { id: innerFreshOrder.adId } });
           if (ad) {
-            const newRemaining = ad.remainingAmount + freshOrder.amountUsdt;
+            const newRemaining = ad.remainingAmount + innerFreshOrder.amountUsdt;
             await tx.p2PAd.update({
-              where: { id: freshOrder.adId },
+              where: { id: innerFreshOrder.adId },
               data: { 
                 remainingAmount: newRemaining,
                 status: ad.status === "EXPIRED" ? "ACTIVE" : ad.status
@@ -597,14 +729,38 @@ export async function runExpiryCheck() {
 
           await tx.auditLog.create({
             data: {
-              userId: freshOrder.creatorId,
+              userId: innerFreshOrder.creatorId,
               action: "P2P_ORDER_AUTO_EXPIRED",
-              details: JSON.stringify({ orderId: freshOrder.id, amount: freshOrder.amountUsdt })
+              details: JSON.stringify({ orderId: innerFreshOrder.id, amount: innerFreshOrder.amountUsdt })
             }
           });
 
-          console.log(`[P2P Worker] Order ${freshOrder.id} successfully marked as EXPIRED.`);
+          return innerFreshOrder;
         });
+
+        if (freshOrder) {
+          console.log(`[P2P Worker] Order ${freshOrder.id} successfully marked as EXPIRED.`);
+
+          // Notify Buyer and Seller of expirations
+          const buyerId = freshOrder.type === "SELL" ? freshOrder.creatorId : freshOrder.merchant.userId;
+          const sellerId = freshOrder.type === "SELL" ? freshOrder.merchant.userId : freshOrder.creatorId;
+
+          await sendNotification(
+            buyerId,
+            "ORDER_EXPIRED",
+            "Payment Window Expired",
+            `Your P2P order #${freshOrder.id.slice(-6)} has expired because the 15-minute payment window closed.`,
+            { orderId: freshOrder.id }
+          );
+
+          await sendNotification(
+            sellerId,
+            "ORDER_EXPIRED",
+            "Payment Window Expired",
+            `P2P trade #${freshOrder.id.slice(-6)} expired. Locked funds have been returned to you safely.`,
+            { orderId: freshOrder.id }
+          );
+        }
       } catch (err) {
         console.error(`[P2P Worker] Error expiring order ${order.id}:`, err);
       }

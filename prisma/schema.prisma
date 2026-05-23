@@ -24,6 +24,8 @@ model User {
   depositRequests    DepositRequest[]
   withdrawalRequests WithdrawalRequest[]
   transactions       Transaction[]
+  notifications      Notification[]
+  pushTokens         PushToken[]
 }
 
 model Wallet {
@@ -173,4 +175,25 @@ model Transaction {
   status      String
   referenceId String?  // ID of the DepositRequest or WithdrawalRequest
   createdAt   DateTime @default(now())
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // e.g. "ORDER_CREATED", "ORDER_PAID", "ORDER_RELEASED", "ORDER_CANCELLED", "ORDER_EXPIRED", "ORDER_DISPUTED", "SYSTEM_NOTIFICATION"
+  title       String
+  message     String
+  isRead      Boolean  @default(false)
+  metaPayload String?  // To store JSON-serialized metadata
+  createdAt   DateTime @default(now())
+}
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

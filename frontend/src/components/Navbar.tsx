@@ -2,6 +2,7 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore.ts';
 import { Wallet, LogOut, Shield, LayoutDashboard, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { NotificationDropdown } from './notificationDropdown.tsx';
 
 export const Navbar = () => {
   const { user, logout } = useAuthStore();
@@ -43,6 +44,7 @@ export const Navbar = () => {
           </div>
 
           <div className="flex items-center gap-4 pl-4 border-l border-zinc-800">
+            <NotificationDropdown />
             <div className="hidden sm:block text-right">
               <p className="text-xs text-zinc-500">Logged in as</p>
               <p className="text-sm font-semibold text-white">{user.name || user.email}</p>
