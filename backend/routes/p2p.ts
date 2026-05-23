@@ -324,7 +324,8 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
         data: {
           adId, creatorId: buyerId, merchantId: ad.merchantId, type: ad.type,
           amountUsdt: qty, amountEtb: fiatAmount, status: "PENDING",
-          paymentMethod, idempotencyKey
+          paymentMethod, idempotencyKey,
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000)
         },
         include: { merchant: { include: { user: true } } }
       });
@@ -383,7 +384,7 @@ router.post("/orders/:id/paid", authenticate, checkNotFrozen, upload.single("pro
 
       const update = await tx.p2POrder.updateMany({
         where: { id, status: "PENDING" },
-        data: { status: "PAID", paymentProof }
+        data: { status: "PAID", paymentProof, paidAt: new Date() }
       });
       if (update.count === 0) throw new Error("Race condition: Order state changed.");
     });
@@ -421,7 +422,7 @@ router.post("/orders/:id/release", authenticate, checkNotFrozen, async (req: Aut
 
       const update = await tx.p2POrder.updateMany({
         where: { id, status: order.status },
-        data: { status: "COMPLETED", completedAt: new Date() }
+        data: { status: "COMPLETED", completedAt: new Date(), releasedAt: new Date() }
       });
       if (update.count === 0) throw new Error("Race condition: Order state changed.");
 
@@ -466,14 +467,19 @@ router.post("/orders/:id/cancel", authenticate, checkNotFrozen, async (req: Auth
       }
 
       if (!isAdmin) {
-        const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && order.merchant.userId === userId);
-        const isSeller = (order.type === "SELL" && order.merchant.userId === userId) || (order.type === "BUY" && order.creatorId === userId);
+        const merchantObj = await tx.merchant.findUnique({ where: { id: order.merchantId } });
+        const isBuyer = (order.type === "SELL" && order.creatorId === userId) || (order.type === "BUY" && merchantObj?.userId === userId);
+        const isSeller = (order.type === "SELL" && merchantObj?.userId === userId) || (order.type === "BUY" && order.creatorId === userId);
+        
         if (!isBuyer && !isSeller) throw new Error("Unauthorized.");
+        if (order.status === "PENDING" && !isBuyer) {
+          throw new Error("Sellers are not allowed to cancel the order. Only the buyer can cancel.");
+        }
       }
 
       const update = await tx.p2POrder.updateMany({
         where: { id, status: order.status },
-        data: { status: "CANCELLED" }
+        data: { status: "CANCELLED", cancelledAt: new Date() }
       });
       if (update.count === 0) throw new Error("Race condition: Order state changed.");
 
@@ -527,7 +533,7 @@ router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: Aut
 
       const update = await tx.p2POrder.updateMany({
         where: { id, status: order.status },
-        data: { status: "DISPUTED", disputeReason: reason }
+        data: { status: "DISPUTED", disputeReason: reason, disputedAt: new Date() }
       });
       if (update.count === 0) throw new Error("Race condition: Order state changed.");
     });
@@ -536,5 +542,76 @@ router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: Aut
     res.status(400).json({ error: error.message });
   }
 });
+
+export async function runExpiryCheck() {
+  try {
+    const expiredOrders = await prisma.p2POrder.findMany({
+      where: {
+        status: "PENDING",
+        expiresAt: {
+          lt: new Date()
+        }
+      }
+    });
+
+    if (expiredOrders.length === 0) return;
+
+    console.log(`[P2P Worker] Found ${expiredOrders.length} expired orders to clean up.`);
+
+    for (const order of expiredOrders) {
+      try {
+        await prisma.$transaction(async (tx) => {
+          const freshOrder = await tx.p2POrder.findUnique({
+            where: { id: order.id }
+          });
+
+          if (!freshOrder || freshOrder.status !== "PENDING") {
+            return;
+          }
+
+          const update = await tx.p2POrder.updateMany({
+            where: { id: order.id, status: "PENDING" },
+            data: { status: "EXPIRED" }
+          });
+
+          if (update.count === 0) return;
+
+          if (freshOrder.type === "BUY") {
+            await tx.wallet.update({
+              where: { userId: freshOrder.creatorId },
+              data: { balance: { increment: freshOrder.amountUsdt }, lockedBalance: { decrement: freshOrder.amountUsdt } }
+            });
+          }
+
+          const ad = await tx.p2PAd.findUnique({ where: { id: freshOrder.adId } });
+          if (ad) {
+            const newRemaining = ad.remainingAmount + freshOrder.amountUsdt;
+            await tx.p2PAd.update({
+              where: { id: freshOrder.adId },
+              data: { 
+                remainingAmount: newRemaining,
+                status: ad.status === "EXPIRED" ? "ACTIVE" : ad.status
+              }
+            });
+          }
+
+          await tx.auditLog.create({
+            data: {
+              userId: freshOrder.creatorId,
+              action: "P2P_ORDER_AUTO_EXPIRED",
+              details: JSON.stringify({ orderId: freshOrder.id, amount: freshOrder.amountUsdt })
+            }
+          });
+
+          console.log(`[P2P Worker] Order ${freshOrder.id} successfully marked as EXPIRED.`);
+        });
+      } catch (err) {
+        console.error(`[P2P Worker] Error expiring order ${order.id}:`, err);
+      }
+    }
+  } catch (err) {
+    console.error("[P2P Worker] Error running expiry check:", err);
+  }
+}
 
 export default router;
