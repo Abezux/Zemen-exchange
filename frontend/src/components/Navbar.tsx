@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore.ts';
-import { Wallet, LogOut, Shield, LayoutDashboard, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Wallet, LogOut, Shield, LayoutDashboard, ArrowDownCircle, ArrowUpCircle, User } from 'lucide-react';
 import { NotificationDropdown } from './notificationDropdown.tsx';
 
 export const Navbar = () => {
@@ -35,6 +35,9 @@ export const Navbar = () => {
             </Link>
             <Link to="/withdraw" className="hover:text-white transition-colors flex items-center gap-1.5">
                <ArrowUpCircle className="w-4 h-4" /> Withdraw
+            </Link>
+            <Link to="/profile" className="hover:text-white transition-colors flex items-center gap-1.5">
+               <User className="w-4 h-4" /> Profile
             </Link>
             {user.role === 'ADMIN' && (
               <Link to="/admin" className="text-orange-500 hover:text-orange-400 transition-colors flex items-center gap-1.5 font-bold">

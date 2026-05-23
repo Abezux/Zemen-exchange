@@ -19,7 +19,8 @@ import {
   Timer,
   ExternalLink,
   ChevronRight,
-  Info
+  Info,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -31,11 +32,15 @@ interface Ad {
   minLimit: number;
   maxLimit: number;
   price: number;
+  paymentMethods?: string;
   merchant: {
     businessName: string;
     phoneNumber: string; 
     bio: string;
-    user: { name: string };
+    user: { 
+      name: string;
+      verificationStatus?: string;
+    };
   };
 }
 
@@ -181,6 +186,16 @@ export const P2PPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showApplyModal, setShowApplyModal] = useState(false);
   
+  // Dynamic Filtering Hook States
+  const [minPrice, setMinPrice] = useState('');
+  const [maxPrice, setMaxPrice] = useState('');
+  const [amountFilter, setAmountFilter] = useState('');
+  const [selectedPmFilter, setSelectedPmFilter] = useState('');
+  const [sortBy, setSortBy] = useState('best_match');
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [userEnabledPMs, setUserEnabledPMs] = useState<any[]>([]);
+  const [adPaymentMethods, setAdPaymentMethods] = useState<string[]>([]);
+
   const [showTradeModal, setShowTradeModal] = useState<Ad | null>(null);
   const [tradeAmount, setTradeAmount] = useState({ usdt: '', etb: '' });
   const [selectedPayment, setSelectedPayment] = useState('Telebirr');
@@ -208,12 +223,22 @@ export const P2PPage = () => {
     maxLimit: ''
   });
 
+  const fetchUserPMs = async () => {
+    try {
+      const res = await axios.get('/api/user/payment-methods');
+      setUserEnabledPMs(res.data.filter((pm: any) => pm.isEnabled));
+    } catch (e) {
+      console.error("Failed to load user payments", e);
+    }
+  };
+
   useEffect(() => {
     fetchAds();
     fetchAdminRates();
+    fetchUserPMs();
     if (view === 'orders') fetchOrders();
     if (user?.merchant?.status === 'APPROVED') fetchMyAds();
-  }, [type, view, user?.merchant?.status]);
+  }, [type, view, user?.merchant?.status, minPrice, maxPrice, amountFilter, selectedPmFilter, sortBy, verifiedOnly]);
 
   const fetchAdminRates = async () => {
     try {
@@ -249,15 +274,21 @@ export const P2PPage = () => {
     }
 
     try {
+      const payload = {
+        ...adForm,
+        paymentMethods: adPaymentMethods
+      };
+
       if (editingAd) {
-        await axios.put(`/api/p2p/ads/${editingAd.id}`, adForm);
+        await axios.put(`/api/p2p/ads/${editingAd.id}`, payload);
         alert('Ad updated successfully!');
       } else {
-        await axios.post('/api/p2p/ads', adForm);
+        await axios.post('/api/p2p/ads', payload);
         alert('Ad created successfully!');
       }
       setShowAdModal(false);
       setEditingAd(null);
+      setAdPaymentMethods([]);
       checkAuth(); // Refresh wallet balance
       fetchMyAds();
       fetchAds();
@@ -287,14 +318,24 @@ export const P2PPage = () => {
       minLimit: ad.minLimit.toString(),
       maxLimit: ad.maxLimit.toString()
     });
+    setAdPaymentMethods(ad.paymentMethods ? ad.paymentMethods.split(",") : []);
     setShowAdModal(true);
   };
 
   const fetchAds = async () => {
     try {
       setIsLoading(true);
-      const res = await axios.get('/api/p2p/ads');
-      setAds(res.data.filter((ad: Ad) => ad.type === type));
+      const payload = {
+        type,
+        minPrice: minPrice || undefined,
+        maxPrice: maxPrice || undefined,
+        amount: amountFilter || undefined,
+        paymentMethods: selectedPmFilter || undefined,
+        sortBy,
+        verifiedOnly: verifiedOnly ? 'true' : undefined
+      };
+      const res = await axios.post('/api/p2p/ads/search', payload);
+      setAds(res.data);
     } catch (error) {
       console.error("Fetch ads error", error);
     } finally {
@@ -476,6 +517,114 @@ export const P2PPage = () => {
             </div>
           </div>
           
+          {/* Advanced P2P Matching & Search Filter Bar */}
+          <div className="bg-zinc-950 border border-zinc-850 p-6 rounded-[2rem] space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-orange-500" />
+                <h3 className="text-xs font-black text-white uppercase tracking-wider">Search & Compatibility Filter Engine</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setMinPrice('');
+                  setMaxPrice('');
+                  setAmountFilter('');
+                  setSelectedPmFilter('');
+                  setSortBy('best_match');
+                  setVerifiedOnly(false);
+                }}
+                className="text-[10px] text-zinc-500 hover:text-white transition-colors uppercase font-bold"
+              >
+                Clear Filters
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 text-xs">
+              {/* Payment Method Selector */}
+              <div className="space-y-1.5 col-span-1">
+                <label className="text-zinc-500 font-bold block">Payment Option</label>
+                <select 
+                  value={selectedPmFilter}
+                  onChange={(e) => setSelectedPmFilter(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:border-orange-500"
+                >
+                  <option value="">All payment options</option>
+                  <option value="CBE">CBE (Commercial Bank)</option>
+                  <option value="TELEBIRR">Telebirr Wallet</option>
+                  <option value="ABYSSINIA">Bank of Abyssinia</option>
+                  <option value="DASHEN">Dashen Bank</option>
+                  <option value="AWASH">Awash Bank</option>
+                  <option value="CBE BIRR">CBE Birr Wallet</option>
+                </select>
+              </div>
+
+              {/* Trade Size target (fiat limit verification) */}
+              <div className="space-y-1.5 col-span-1">
+                <label className="text-zinc-500 font-bold block">Fiat Amount (ETB)</label>
+                <input 
+                  type="number"
+                  placeholder="e.g. 5000"
+                  value={amountFilter}
+                  onChange={(e) => setAmountFilter(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Min Price Limit */}
+              <div className="space-y-1.5 col-span-1">
+                <label className="text-zinc-500 font-bold block">Min Price (ETB)</label>
+                <input 
+                  type="number"
+                  placeholder="Min Rate"
+                  value={minPrice}
+                  onChange={(e) => setMinPrice(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Max Price Limit */}
+              <div className="space-y-1.5 col-span-1">
+                <label className="text-zinc-500 font-bold block">Max Price (ETB)</label>
+                <input 
+                  type="number"
+                  placeholder="Max Rate"
+                  value={maxPrice}
+                  onChange={(e) => setMaxPrice(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {/* Rank/Sort Multi-tier Logic */}
+              <div className="space-y-1.5 col-span-1">
+                <label className="text-zinc-500 font-bold block">Rank By</label>
+                <select 
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:border-orange-500"
+                >
+                  <option value="best_match">☆ Best Match (Scored)</option>
+                  <option value="price_asc">Price: Low to High</option>
+                  <option value="price_desc">Price: High to Low</option>
+                  <option value="liquidity_desc">Largest Liquidity</option>
+                </select>
+              </div>
+
+              {/* Verified Badge and checkboxes */}
+              <div className="flex items-center gap-2 h-full pt-4 md:pt-5 col-span-1">
+                <input 
+                  type="checkbox"
+                  id="verifiedOnlyCheckbox"
+                  checked={verifiedOnly}
+                  onChange={(e) => setVerifiedOnly(e.target.checked)}
+                  className="w-4 h-4 text-orange-600 bg-zinc-900 border-zinc-800 rounded focus:ring-orange-500"
+                />
+                <label htmlFor="verifiedOnlyCheckbox" className="text-zinc-400 font-bold select-none cursor-pointer">
+                  Verified Trust only
+                </label>
+              </div>
+            </div>
+          </div>
+
           {/* Marketplace Content */}
           <div className="space-y-4">
             <div className="flex justify-between items-center px-4">
@@ -491,53 +640,103 @@ export const P2PPage = () => {
                     <div key={i} className="h-32 bg-zinc-900/50 animate-pulse rounded-3xl border border-zinc-800"></div>
                   ))
                 ) : ads.length > 0 ? (
-                  ads.map((ad) => (
-                    <motion.div 
-                      key={ad.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-zinc-900/40 border border-zinc-800/60 p-6 rounded-3xl hover:border-zinc-700 transition-all group"
-                    >
-                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-                        <div className="flex items-center gap-4">
-                           <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center font-black text-orange-500 italic text-xl border border-zinc-800">
-                             {ad.merchant.businessName.charAt(0)}
-                           </div>
-                           <div>
-                             <h4 className="text-white font-black italic uppercase tracking-tight flex items-center gap-2">
-                               {ad.merchant.businessName}
-                               <span className="bg-emerald-500/10 text-emerald-500 text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/20">VERIFIED</span>
-                             </h4>
-                             <p className="text-zinc-500 text-xs font-medium">98.5% Completion • 12min Avg</p>
-                           </div>
+                  ads.map((ad) => {
+                    const adMethods = ad.paymentMethods ? ad.paymentMethods.split(",").map(p => p.trim().toUpperCase()) : [];
+                    const userMethods = userEnabledPMs.map(m => m.bankName.trim().toUpperCase());
+                    const matchedMethods = adMethods.filter(method => userMethods.includes(method));
+                    const hasMatchedMethod = matchedMethods.length > 0;
+                    const isMerchantVerified = ad.merchant.user.verificationStatus === "verified";
+
+                    return (
+                      <motion.div 
+                        key={ad.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`border p-6 rounded-3xl transition-all group ${
+                          hasMatchedMethod 
+                            ? 'bg-orange-950/10 border-orange-500/20 hover:border-orange-500/40 shadow-md shadow-orange-950/5' 
+                            : 'bg-zinc-900/40 border-zinc-800/60 hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                          <div className="flex items-center gap-4">
+                             <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center font-black text-orange-500 italic text-xl border border-zinc-800">
+                               {ad.merchant.businessName.charAt(0)}
+                             </div>
+                             <div>
+                               <h4 className="text-white font-black italic uppercase tracking-tight flex items-center gap-2">
+                                 {ad.merchant.businessName}
+                                 {isMerchantVerified ? (
+                                   <span className="bg-emerald-500/10 text-emerald-500 text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1 font-extrabold uppercase tracking-wide">
+                                     ✓ Verified Broker
+                                   </span>
+                                 ) : (
+                                   <span className="bg-zinc-900 text-zinc-500 text-[8px] px-1.5 py-0.5 rounded border border-zinc-850">
+                                     Standard Member
+                                   </span>
+                                 )}
+                               </h4>
+                               <p className="text-zinc-500 text-xs font-medium">98.5% Completion • 12min Avg</p>
+                             </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-8 w-full md:w-auto">
+                             <div>
+                               <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Price</p>
+                               <h5 className="text-xl font-black text-white italic tracking-tighter leading-none">{ad.price} <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">ETB</span></h5>
+                             </div>
+                             <div>
+                               <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Available</p>
+                               <h5 className="text-sm font-black text-zinc-300 italic tracking-tight">{ad.remainingAmount.toFixed(2)} USDT</h5>
+                               <p className="text-[10px] text-zinc-500 font-mono italic">Limits: {ad.minLimit}-{ad.maxLimit} ETB</p>
+                             </div>
+                             <div className="col-span-2 lg:col-span-1 flex items-center">
+                               <button 
+                                  onClick={() => setShowTradeModal(ad)}
+                                  className={`w-full lg:w-40 py-3 rounded-xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 ${
+                                    type === 'SELL' 
+                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/10' 
+                                      : 'bg-white text-black hover:bg-zinc-200'
+                                  }`}
+                                >
+                                  {type === 'SELL' ? 'Buy USDT' : 'Sell USDT'}
+                                </button>
+                             </div>
+                          </div>
                         </div>
 
-                        <div className="grid grid-cols-2 lg:grid-cols-3 gap-8 w-full md:w-auto">
-                           <div>
-                             <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Price</p>
-                             <h5 className="text-xl font-black text-white italic tracking-tighter leading-none">{ad.price} <span className="text-[10px] text-zinc-500">ETB</span></h5>
-                           </div>
-                           <div>
-                             <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-1 italic">Available</p>
-                             <h5 className="text-sm font-black text-zinc-300 italic tracking-tight">{ad.remainingAmount.toFixed(2)} USDT</h5>
-                             <p className="text-[10px] text-zinc-500 font-mono italic">Limits: {ad.minLimit}-{ad.maxLimit} ETB</p>
-                           </div>
-                           <div className="col-span-2 lg:col-span-1 flex items-center">
-                             <button 
-                                onClick={() => setShowTradeModal(ad)}
-                                className={`w-full lg:w-40 py-3 rounded-xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 ${
-                                  type === 'SELL' 
-                                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/10' 
-                                    : 'bg-white text-black hover:bg-zinc-200'
-                                }`}
-                              >
-                                {type === 'SELL' ? 'Buy USDT' : 'Sell USDT'}
-                              </button>
+                        {/* Payment Options Row */}
+                        <div className="mt-4 pt-3 border-t border-zinc-900/40 flex flex-wrap items-center gap-2 select-none">
+                          <span className="text-[10px] text-zinc-500 uppercase font-black italic mr-1">Settlement Channels:</span>
+                          {adMethods.length === 0 ? (
+                            <span className="text-[10px] text-zinc-600 font-bold">Seller did not specify option</span>
+                          ) : (
+                            adMethods.map((method, index) => {
+                              const isMatched = userMethods.includes(method);
+                              return (
+                                <span 
+                                  key={index} 
+                                  className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
+                                    isMatched 
+                                      ? 'bg-emerald-600/15 text-emerald-400 border-emerald-500/30 font-extrabold' 
+                                      : 'bg-zinc-850/60 text-zinc-500 border-zinc-850'
+                                  }`}
+                                >
+                                  {isMatched ? '✓ ' : ''}{method}
+                                </span>
+                              );
+                            })
+                          )}
+
+                          {hasMatchedMethod && (
+                            <div className="ml-auto text-emerald-400 font-black italic uppercase tracking-wider text-[9px] bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5 animate-pulse">
+                              <Sparkles className="w-3 h-3" /> MATCHED FOR YOU
                             </div>
+                          )}
                         </div>
-                      </div>
-                    </motion.div>
-                  ))
+                      </motion.div>
+                    );
+                  })
                 ) : (
                   <div className="p-20 text-center space-y-4">
                      <AlertCircle className="w-12 h-12 text-zinc-800 mx-auto" />
@@ -971,6 +1170,36 @@ export const P2PPage = () => {
                        <div className="relative opacity-60">
                            <label className="absolute left-4 top-2 text-[8px] font-black text-zinc-500 uppercase italic">Max Auto (ETB)</label>
                            <input disabled placeholder="0.00" type="number" value={adForm.maxLimit} className="w-full bg-zinc-900 border border-zinc-800 px-4 pt-6 pb-3 rounded-xl text-white font-black italic text-sm" />
+                       </div>
+                    </div>
+
+                    <div className="space-y-1.5 border-t border-zinc-900 pt-3">
+                       <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic block mb-1">Accepted Settlement Options</label>
+                       <div className="grid grid-cols-2 gap-2 text-xs">
+                         {['CBE', 'Telebirr', 'Abyssinia', 'Dashen', 'Awash', 'CBE Birr'].map(method => {
+                            const isChecked = adPaymentMethods.includes(method);
+                            return (
+                               <button
+                                  key={method}
+                                  type="button"
+                                  onClick={() => {
+                                     if (isChecked) {
+                                        setAdPaymentMethods(adPaymentMethods.filter(m => m !== method));
+                                     } else {
+                                        setAdPaymentMethods([...adPaymentMethods, method]);
+                                     }
+                                  }}
+                                  className={`py-2 px-3 rounded-lg border text-[11px] font-bold text-left flex items-center justify-between transition-all ${
+                                     isChecked 
+                                        ? 'bg-orange-600/10 border-orange-500 text-orange-400' 
+                                        : 'bg-black border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                                  }`}
+                               >
+                                  <span>{method}</span>
+                                  {isChecked && <span className="text-[10px]">✓</span>}
+                               </button>
+                            );
+                         })}
                        </div>
                     </div>
                  </div>
