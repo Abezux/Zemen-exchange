@@ -18,8 +18,7 @@ import {
   Camera, 
   Info,
   ToggleLeft,
-  ToggleRight,
-  Sparkles
+  ToggleRight
 } from 'lucide-react';
 
 export const ProfilePage = () => {
@@ -38,12 +37,25 @@ export const ProfilePage = () => {
   const [paymentMethods, setPaymentMethods] = useState<any[]>(user?.paymentMethods || []);
   const [isAddingMethod, setIsAddingMethod] = useState(false);
   const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
-  const [pmBankName, setPmBankName] = useState('Commercial Bank of Ethiopia (CBE)');
+  const [pmBankName, setPmBankName] = useState('CBE');
   const [pmAccountName, setPmAccountName] = useState('');
   const [pmAccountNumber, setPmAccountNumber] = useState('');
   const [pmIsDefault, setPmIsDefault] = useState(false);
   const [pmError, setPmError] = useState('');
   const [isLoadingPM, setIsLoadingPM] = useState(false);
+
+  const getPaymentMethodLabel = (code: string) => {
+    const key = code.trim().toUpperCase();
+    switch (key) {
+      case 'CBE': return 'Commercial Bank of Ethiopia (CBE)';
+      case 'TELEBIRR': return 'Telebirr (Mobile Wallet)';
+      case 'ABYSSINIA': return 'Bank of Abyssinia (BoA)';
+      case 'DASHEN': return 'Dashen Bank';
+      case 'AWASH': return 'Awash Bank';
+      case 'CBE BIRR': return 'CBE Birr Wallet';
+      default: return code;
+    }
+  };
 
   // Load latest payment methods
   const fetchPaymentMethods = async () => {
@@ -95,19 +107,6 @@ export const ProfilePage = () => {
     }
   };
 
-  // Quick Account Status Simulator (Unverified/Pending/Verified + User/Merchant Upgraders)
-  const handleQuickStatusChange = async (type: 'verificationStatus' | 'accountType', value: string) => {
-    try {
-      const payload = { [type]: value };
-      await updateProfile(payload);
-      setProfileSuccess(`${type === 'accountType' ? 'Role' : 'Verification'} updated to ${value.toUpperCase()}`);
-      setTimeout(() => setProfileSuccess(''), 4000);
-      await checkAuth(); // Refresh auth schema state
-    } catch (err: any) {
-      setProfileError('Failed to simulation-upgrade');
-    }
-  };
-
   const handleAddPaymentMethod = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pmAccountName || !pmAccountNumber) {
@@ -119,7 +118,7 @@ export const ProfilePage = () => {
 
     try {
       const payload = {
-        bankName: pmBankName,
+        bankName: pmBankName.trim().toUpperCase(),
         accountName: pmAccountName,
         accountNumber: pmAccountNumber,
         isDefault: pmIsDefault
@@ -136,7 +135,10 @@ export const ProfilePage = () => {
         setPaymentMethods(res.data);
       }
 
+      await checkAuth();
+
       // Reset form
+      setPmBankName('CBE');
       setPmAccountName('');
       setPmAccountNumber('');
       setPmIsDefault(false);
@@ -150,7 +152,7 @@ export const ProfilePage = () => {
 
   const handleStartEdit = (method: any) => {
     setEditingMethodId(method.id);
-    setPmBankName(method.bankName);
+    setPmBankName(method.bankName.trim().toUpperCase());
     setPmAccountName(method.accountName);
     setPmAccountNumber(method.accountNumber);
     setPmIsDefault(method.isDefault);
@@ -162,6 +164,7 @@ export const ProfilePage = () => {
     try {
       const res = await axios.delete(`/api/user/payment-methods/${id}`);
       setPaymentMethods(res.data);
+      await checkAuth();
     } catch (err) {
       alert('Deletion failed');
     }
@@ -172,6 +175,7 @@ export const ProfilePage = () => {
       const res = await axios.patch(`/api/user/payment-methods/${id}/toggle`);
       // Update local state
       setPaymentMethods(paymentMethods.map(m => m.id === id ? { ...m, isEnabled: res.data.isEnabled } : m));
+      await checkAuth();
     } catch (err) {
       alert('Toggle status failed');
     }
@@ -181,6 +185,7 @@ export const ProfilePage = () => {
     try {
       const res = await axios.post(`/api/user/payment-methods/${id}/default`);
       setPaymentMethods(res.data);
+      await checkAuth();
     } catch (err) {
       alert('Setting default failed');
     }
@@ -224,53 +229,6 @@ export const ProfilePage = () => {
                 {user?.verificationStatus === 'unverified' && <AlertCircle className="w-3.5 h-3.5" />}
                 {user?.verificationStatus || 'unverified'}
               </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Sandbox HUD for Roles/Verification Testing */}
-        <div className="p-4 bg-zinc-950/60 rounded-xl border border-zinc-800/80 max-w-sm w-full">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-orange-500 flex items-center gap-1.5 mb-2.5">
-            <Sparkles className="w-3.5 h-3.5 text-orange-400 animate-pulse" /> Tester Status Sandbox
-          </h3>
-          <p className="text-[11px] text-zinc-500 mb-3 leading-relaxed">
-            Instantly simulate verification status or upgrade account types for end-to-end P2P flow verification.
-          </p>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="space-y-1.5">
-              <span className="text-[10px] uppercase font-bold text-zinc-600 block">Verification:</span>
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => handleQuickStatusChange('verificationStatus', 'verified')}
-                  className="px-2 py-1 bg-emerald-950/40 border border-emerald-800/60 hover:border-emerald-500 text-emerald-400 font-medium rounded text-left"
-                >
-                  ✓ Set Verified
-                </button>
-                <button
-                  onClick={() => handleQuickStatusChange('verificationStatus', 'unverified')}
-                  className="px-2 py-1 bg-red-950/40 border border-red-800/60 hover:border-red-500 text-red-400 font-medium rounded text-left"
-                >
-                  ✗ Set Unverified
-                </button>
-              </div>
-            </div>
-            
-            <div className="space-y-1.5">
-              <span className="text-[10px] uppercase font-bold text-zinc-600 block">Account Type:</span>
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => handleQuickStatusChange('accountType', 'merchant')}
-                  className="px-2 py-1 bg-orange-950/40 border border-orange-800/60 hover:border-orange-500 text-orange-400 font-medium rounded text-left"
-                >
-                  👑 Set Merchant
-                </button>
-                <button
-                  onClick={() => handleQuickStatusChange('accountType', 'user')}
-                  className="px-2 py-1 bg-zinc-900 border border-zinc-800 hover:border-zinc-600 text-zinc-300 font-medium rounded text-left"
-                >
-                  👤 Set User
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -405,11 +363,11 @@ export const ProfilePage = () => {
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-orange-500 font-medium"
                   >
                     <option value="CBE">Commercial Bank of Ethiopia (CBE)</option>
-                    <option value="Telebirr">Telebirr (Mobile Wallet)</option>
-                    <option value="Abyssinia">Bank of Abyssinia (BoA)</option>
-                    <option value="Dashen">Dashen Bank</option>
-                    <option value="Awash">Awash Bank</option>
-                    <option value="CBE Birr">CBE Birr Wallet</option>
+                    <option value="TELEBIRR">Telebirr (Mobile Wallet)</option>
+                    <option value="ABYSSINIA">Bank of Abyssinia (BoA)</option>
+                    <option value="DASHEN">Dashen Bank</option>
+                    <option value="AWASH">Awash Bank</option>
+                    <option value="CBE BIRR">CBE Birr Wallet</option>
                   </select>
                 </div>
 
@@ -498,7 +456,7 @@ export const ProfilePage = () => {
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h4 className="font-extrabold text-white text-sm">{method.bankName}</h4>
+                        <h4 className="font-extrabold text-white text-sm">{getPaymentMethodLabel(method.bankName)}</h4>
                         {method.isDefault && (
                           <span className="px-2 py-0.5 rounded-md bg-orange-600/20 text-orange-500 text-[10px] font-extrabold uppercase tracking-wide">
                             Default

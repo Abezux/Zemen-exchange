@@ -45,10 +45,16 @@ async function logAction(userId: string, action: string, details?: any) {
  * 1. Merchant Application (Standard Check)
  */
 router.post("/merchant/apply", authenticate, async (req: AuthRequest, res: Response) => {
-  const { businessName, phoneNumber, bio } = req.body;
+  const { phoneNumber, bio } = req.body;
   if (!req.user?.id) return res.status(401).json({ error: "Auth missing" });
 
   try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const finalBusinessName = user.name || user.email.split("@")[0];
+
+    // Ensure status is always PENDING initially
     const existingMerchant = await prisma.merchant.findUnique({ where: { userId: req.user.id } });
     if (existingMerchant) {
       if (existingMerchant.status === "PENDING") return res.status(400).json({ error: "Pending application exists." });
@@ -56,13 +62,13 @@ router.post("/merchant/apply", authenticate, async (req: AuthRequest, res: Respo
 
       const updated = await prisma.merchant.update({
         where: { id: existingMerchant.id },
-        data: { businessName, phoneNumber, bio, status: "PENDING" }
+        data: { businessName: finalBusinessName, phoneNumber, bio: bio || "", status: "PENDING" }
       });
       return res.json(updated);
     }
 
     const merchant = await prisma.merchant.create({
-      data: { userId: req.user.id, businessName, phoneNumber, bio: bio || "", status: "PENDING" }
+      data: { userId: req.user.id, businessName: finalBusinessName, phoneNumber, bio: bio || "", status: "PENDING" }
     });
     res.json(merchant);
   } catch (error) {
@@ -150,12 +156,6 @@ async function getFilteredAndRankedAds(filters: any, currentUserId?: string) {
     } else if (typeof paymentMethods === "string" && paymentMethods.trim() !== "") {
       targetMethods = paymentMethods.split(",").map((p: string) => p.trim().toUpperCase());
     }
-  } else if (currentUserId) {
-    // If no explicit search payment method is specified, default to the user's enabled ones!
-    const userMethods = await prisma.userPaymentMethod.findMany({
-      where: { userId: currentUserId, isEnabled: true }
-    });
-    targetMethods = userMethods.map(m => m.bankName.trim().toUpperCase());
   }
 
   // 1. Post-Filter on Payment Methods Intersection
@@ -276,7 +276,7 @@ router.get("/my-ads", authenticate, async (req: AuthRequest, res: Response) => {
  * 3. Atomic Ad Creation (SELL ads lock funds immediately)
  */
 router.post("/ads", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
-  const { type, amount, minLimit, maxLimit, price, paymentMethods } = req.body;
+  const { type, amount, minLimit, maxLimit, price, paymentMethods, adDisplayName } = req.body;
   const userId = req.user!.id;
   const numAmount = Math.max(0, parseFloat(amount));
   const numPrice = parseFloat(price);
@@ -288,6 +288,26 @@ router.post("/ads", authenticate, checkNotFrozen, async (req: AuthRequest, res: 
     });
 
     if (!merchant || merchant.status !== "APPROVED") return res.status(403).json({ error: "Unapproved merchant" });
+
+    // Validate payment methods belong to User Profile (centralized model)
+    const selectedList = (Array.isArray(paymentMethods) ? paymentMethods : (paymentMethods ? paymentMethods.split(",") : []))
+      .map((p: string) => p.trim().toUpperCase())
+      .filter(Boolean);
+
+    if (selectedList.length === 0) {
+      return res.status(400).json({ error: "At least one payment method is required." });
+    }
+
+    const userMethods = await prisma.userPaymentMethod.findMany({
+      where: { userId, isEnabled: true }
+    });
+    const userBankNames = userMethods.map(m => m.bankName.trim().toUpperCase());
+
+    for (const bank of selectedList) {
+      if (!userBankNames.includes(bank)) {
+        return res.status(400).json({ error: "Add this payment method to your profile to continue" });
+      }
+    }
 
     // Enforce Rate Limits (Admin + 0-3% range)
     const settings = await prisma.globalSetting.findUnique({ where: { id: "singleton" } });
@@ -324,7 +344,8 @@ router.post("/ads", authenticate, checkNotFrozen, async (req: AuthRequest, res: 
           minLimit: parseFloat(minLimit),
           maxLimit: parseFloat(maxLimit),
           price: numPrice,
-          paymentMethods: Array.isArray(paymentMethods) ? paymentMethods.join(",") : (paymentMethods || "")
+          paymentMethods: selectedList.join(","),
+          adDisplayName: adDisplayName || null
         }
       });
     });
@@ -341,7 +362,7 @@ router.post("/ads", authenticate, checkNotFrozen, async (req: AuthRequest, res: 
  */
 router.put("/ads/:id", authenticate, checkNotFrozen, async (req: AuthRequest, res: Response) => {
   const { id } = req.params;
-  const { price, minLimit, maxLimit, amount, paymentMethods } = req.body;
+  const { price, minLimit, maxLimit, amount, paymentMethods, adDisplayName } = req.body;
   const userId = req.user!.id;
 
   try {
@@ -400,7 +421,30 @@ router.put("/ads/:id", authenticate, checkNotFrozen, async (req: AuthRequest, re
       }
 
       if (paymentMethods !== undefined) {
-        updates.paymentMethods = Array.isArray(paymentMethods) ? paymentMethods.join(",") : (paymentMethods || "");
+        const selectedList = (Array.isArray(paymentMethods) ? paymentMethods : (paymentMethods ? paymentMethods.split(",") : []))
+          .map((p: string) => p.trim().toUpperCase())
+          .filter(Boolean);
+
+        if (selectedList.length === 0) {
+          throw new Error("At least one payment method is required.");
+        }
+
+        const userMethods = await tx.userPaymentMethod.findMany({
+          where: { userId, isEnabled: true }
+        });
+        const userBankNames = userMethods.map(m => m.bankName.trim().toUpperCase());
+
+        for (const bank of selectedList) {
+          if (!userBankNames.includes(bank)) {
+            throw new Error("Add this payment method to your profile to continue");
+          }
+        }
+
+        updates.paymentMethods = selectedList.join(",");
+      }
+
+      if (adDisplayName !== undefined) {
+        updates.adDisplayName = adDisplayName || null;
       }
 
       return await tx.p2PAd.update({
@@ -467,18 +511,45 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
   try {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Precise Liquidity Lock
-      const ad = await tx.p2PAd.findUnique({ where: { id: adId }, include: { merchant: true } });
+      const ad = await tx.p2PAd.findUnique({
+        where: { id: adId },
+        include: { merchant: { include: { user: { include: { paymentMethods: true } } } } }
+      });
       if (!ad || ad.status !== "ACTIVE") throw new Error("Ad inactive.");
       if (ad.remainingAmount < qty) throw new Error("Insufficient ad liquidity.");
 
       const fiatAmount = qty * ad.price;
       if (fiatAmount < ad.minLimit || fiatAmount > ad.maxLimit) throw new Error("Trade limits violated.");
 
+      // Check paymentMethod intersection
+      const adMethods = ad.paymentMethods ? ad.paymentMethods.split(",").map(p => p.trim().toUpperCase()) : [];
+      
+      // Get merchant profile payment methods
+      const merchantProfileMethods = await tx.userPaymentMethod.findMany({
+        where: { userId: ad.merchant.userId, isEnabled: true }
+      });
+      const merchantProfileBankNames = merchantProfileMethods.map(m => m.bankName.trim().toUpperCase());
+
+      // Intersection elements
+      const intersection = adMethods.filter(method => merchantProfileBankNames.includes(method));
+
+      if (!paymentMethod) {
+        throw new Error("Payment method selection is required.");
+      }
+
+      if (!intersection.includes(paymentMethod.trim().toUpperCase())) {
+        throw new Error("Selected payment method is not part of the merchant's profile and ad intersection.");
+      }
+
       // Check for idempotency if provided
       if (idempotencyKey) {
         const existing = await tx.p2POrder.findUnique({
           where: { idempotencyKey },
-          include: { merchant: { include: { user: true } } }
+          include: { 
+            ad: true,
+            creator: { include: { paymentMethods: true } },
+            merchant: { include: { user: { include: { paymentMethods: true } } } } 
+          }
         });
         if (existing) return existing;
       }
@@ -507,10 +578,14 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
         data: {
           adId, creatorId: buyerId, merchantId: ad.merchantId, type: ad.type,
           amountUsdt: qty, amountEtb: fiatAmount, status: "PENDING",
-          paymentMethod, idempotencyKey,
+          paymentMethod: paymentMethod.trim().toUpperCase(), idempotencyKey,
           expiresAt: new Date(Date.now() + 15 * 60 * 1000)
         },
-        include: { merchant: { include: { user: true } } }
+        include: { 
+          ad: true,
+          creator: { include: { paymentMethods: true } },
+          merchant: { include: { user: { include: { paymentMethods: true } } } } 
+        }
       });
     });
 
@@ -582,7 +657,11 @@ router.get("/orders", authenticate, async (req: AuthRequest, res) => {
   try {
     const orders = await prisma.p2POrder.findMany({
       where: { OR: [{ creatorId: req.user!.id }, { merchant: { userId: req.user!.id } }] },
-      include: { ad: true, creator: true, merchant: { include: { user: true } } },
+      include: { 
+        ad: true, 
+        creator: { include: { paymentMethods: true } }, 
+        merchant: { include: { user: { include: { paymentMethods: true } } } } 
+      },
       orderBy: { createdAt: "desc" }
     });
     res.json(orders);

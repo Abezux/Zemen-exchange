@@ -35,7 +35,7 @@ interface AuthState {
   isLoading: boolean;
   setUser: (user: User | null) => void;
   checkAuth: () => Promise<void>;
-  updateProfile: (data: FormData | { name?: string; bio?: string; avatarUrl?: string; verificationStatus?: string; accountType?: string }) => Promise<User>;
+  updateProfile: (data: FormData | { name?: string; bio?: string; avatarUrl?: string }) => Promise<User>;
   logout: () => Promise<void>;
 }
 

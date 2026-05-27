@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Info,
   Sparkles,
+  Copy,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -200,9 +201,22 @@ export const P2PPage = () => {
 
   const [showTradeModal, setShowTradeModal] = useState<Ad | null>(null);
   const [tradeAmount, setTradeAmount] = useState({ usdt: '', etb: '' });
-  const [selectedPayment, setSelectedPayment] = useState('Telebirr');
+  const [selectedPayment, setSelectedPayment] = useState('');
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
+
+  const getPaymentMethodLabel = (code: string) => {
+    const key = code.trim().toUpperCase();
+    switch (key) {
+      case 'CBE': return 'Commercial Bank of Ethiopia (CBE)';
+      case 'TELEBIRR': return 'Telebirr (Mobile Wallet)';
+      case 'ABYSSINIA': return 'Bank of Abyssinia (BoA)';
+      case 'DASHEN': return 'Dashen Bank';
+      case 'AWASH': return 'Awash Bank';
+      case 'CBE BIRR': return 'CBE Birr Wallet';
+      default: return code;
+    }
+  };
   
   const [merchantForm, setMerchantForm] = useState({
     businessName: '',
@@ -222,8 +236,57 @@ export const P2PPage = () => {
     amount: '',
     price: '',
     minLimit: '',
-    maxLimit: ''
+    maxLimit: '',
+    adDisplayName: ''
   });
+
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, field: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const getRecipientPaymentDetails = (ord: P2POrder) => {
+    // If order is to buy, creator is buyer and merchant is seller (recipient)
+    // If order is to sell, creator is seller (recipient) and merchant is buyer
+    const isMerchantPaying = ord.type === 'BUY'; // Merchant is buying, so merchant pays ETB
+    
+    if (isMerchantPaying) {
+      // Creator is receiving, look up creator's userPaymentMethod
+      const bank = ord.paymentMethod?.toUpperCase();
+      const pm = ord.creator?.paymentMethods?.find((p: any) => p.bankName.toUpperCase() === bank);
+      if (pm) {
+        return {
+          bankName: pm.bankName,
+          accountName: pm.accountName,
+          accountNumber: pm.accountNumber
+        };
+      }
+      return {
+        bankName: ord.paymentMethod,
+        accountName: ord.creator?.name || 'User Account',
+        accountNumber: 'No account details found'
+      };
+    } else {
+      // Merchant is receiving, look up merchant's user's payment method
+      const bank = ord.paymentMethod?.toUpperCase();
+      const pm = ord.merchant?.user?.paymentMethods?.find((p: any) => p.bankName.toUpperCase() === bank);
+      if (pm) {
+        return {
+          bankName: pm.bankName,
+          accountName: pm.accountName,
+          accountNumber: pm.accountNumber
+        };
+      }
+      return {
+         bankName: ord.paymentMethod,
+         accountName: ord.merchant?.user?.name || ord.merchant?.businessName || 'Merchant Account',
+         accountNumber: ord.merchant?.phoneNumber || 'No account details found'
+      };
+    }
+  };
 
   const fetchUserPMs = async () => {
     try {
@@ -275,6 +338,13 @@ export const P2PPage = () => {
       return alert('Min limit cannot exceed total ad value.');
     }
 
+    const userPMBankNames = userEnabledPMs.map((m: any) => m.bankName.trim().toUpperCase());
+    for (const pm of adPaymentMethods) {
+      if (!userPMBankNames.includes(pm.trim().toUpperCase())) {
+        return alert("Add this payment method to your profile to continue");
+      }
+    }
+
     try {
       const payload = {
         ...adForm,
@@ -291,6 +361,14 @@ export const P2PPage = () => {
       setShowAdModal(false);
       setEditingAd(null);
       setAdPaymentMethods([]);
+      setAdForm({
+        type: 'SELL',
+        amount: '',
+        price: '',
+        minLimit: '',
+        maxLimit: '',
+        adDisplayName: ''
+      });
       checkAuth(); // Refresh wallet balance
       fetchMyAds();
       fetchAds();
@@ -318,7 +396,8 @@ export const P2PPage = () => {
       amount: ad.amount.toString(),
       price: ad.price.toString(),
       minLimit: ad.minLimit.toString(),
-      maxLimit: ad.maxLimit.toString()
+      maxLimit: ad.maxLimit.toString(),
+      adDisplayName: ad.adDisplayName || ''
     });
     setAdPaymentMethods(ad.paymentMethods ? ad.paymentMethods.split(",") : []);
     setShowAdModal(true);
@@ -844,11 +923,11 @@ export const P2PPage = () => {
                         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 sm:gap-6">
                           <div className="flex items-center gap-3 sm:gap-4">
                              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/5 rounded-xl sm:rounded-2xl flex items-center justify-center font-black text-orange-500 italic text-lg sm:text-xl border border-zinc-800">
-                               {ad.merchant.businessName.charAt(0)}
+                               {(ad.adDisplayName || ad.merchant.businessName).charAt(0)}
                              </div>
                              <div>
                                <h4 className="text-sm sm:text-base text-white font-black italic uppercase tracking-tight flex flex-wrap items-center gap-1.5 sm:gap-2">
-                                 <span>{ad.merchant.businessName}</span>
+                                 <span>{ad.adDisplayName || ad.merchant.businessName}</span>
                                  {isMerchantVerified ? (
                                    <span className="bg-emerald-500/10 text-emerald-500 text-[8px] px-1.5 py-0.5 rounded border border-emerald-500/20 flex items-center gap-1 font-extrabold uppercase tracking-wide leading-none">
                                      ✓ Verified Broker
@@ -875,7 +954,13 @@ export const P2PPage = () => {
                              </div>
                              <div className="col-span-2 sm:col-span-2 lg:col-span-1 flex items-center pt-1 sm:pt-0">
                                <button 
-                                  onClick={() => setShowTradeModal(ad)}
+                                  onClick={() => {
+                                     setShowTradeModal(ad);
+                                     const adMethods = ad.paymentMethods ? ad.paymentMethods.split(',').map((p: any) => p.trim().toUpperCase()).filter(Boolean) : [];
+                                     const merchantMethods = ad.merchant?.user?.paymentMethods ? ad.merchant.user.paymentMethods.filter((pm: any) => pm.isEnabled).map((pm: any) => pm.bankName.trim().toUpperCase()) : [];
+                                     const intersection = adMethods.filter((m: any) => merchantMethods.includes(m));
+                                     setSelectedPayment(intersection[0] || '');
+                                  }}
                                   className={`w-full lg:w-40 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl font-black uppercase italic tracking-tight transition-all flex items-center justify-center gap-2 text-xs sm:text-sm ${
                                     type === 'SELL' 
                                       ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/10' 
@@ -1021,18 +1106,40 @@ export const P2PPage = () => {
                               <div className="bg-orange-600/5 border border-orange-500/20 p-6 rounded-3xl space-y-4">
                                  <p className="text-xs font-black text-white uppercase italic tracking-widest text-center">Payment Instructions</p>
                                  <div className="space-y-3">
-                                    <div className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
-                                       <span className="text-[10px] text-zinc-500 uppercase font-black italic">Method</span>
-                                       <span className="text-white font-black italic">{order.paymentMethod}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
-                                       <span className="text-[10px] text-zinc-500 uppercase font-black italic">Name</span>
-                                       <span className="text-white font-black italic">{order.merchant.businessName}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
-                                       <span className="text-[10px] text-zinc-500 uppercase font-black italic">Account ID</span>
-                                       <span className="text-orange-500 font-black italic text-lg">{order.merchant.phoneNumber}</span>
-                                    </div>
+                                    {(() => {
+                                       const pDetails = getRecipientPaymentDetails(order);
+                                       return (
+                                          <>
+                                             <div className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
+                                                <span className="text-[10px] text-zinc-500 uppercase font-black italic">Bank / Method</span>
+                                                <div className="flex items-center gap-2">
+                                                   <span className="text-white font-black italic">{pDetails.bankName}</span>
+                                                   <button type="button" onClick={() => handleCopyText(pDetails.bankName, `bank-${order.id}`)} className="text-orange-500 hover:text-white transition-colors">
+                                                      {copiedField === `bank-${order.id}` ? <span className="text-[9px] text-emerald-500 font-bold">Copied!</span> : <Copy className="w-3.5 h-3.5" />}
+                                                   </button>
+                                                </div>
+                                             </div>
+                                             <div className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
+                                                <span className="text-[10px] text-zinc-500 uppercase font-black italic">Account Holder</span>
+                                                <div className="flex items-center gap-2">
+                                                   <span className="text-white font-black italic">{pDetails.accountName}</span>
+                                                   <button type="button" onClick={() => handleCopyText(pDetails.accountName, `name-${order.id}`)} className="text-orange-500 hover:text-white transition-colors">
+                                                      {copiedField === `name-${order.id}` ? <span className="text-[9px] text-emerald-500 font-bold">Copied!</span> : <Copy className="w-3.5 h-3.5" />}
+                                                   </button>
+                                                </div>
+                                             </div>
+                                             <div className="flex justify-between items-center bg-black/40 p-3 rounded-xl border border-zinc-800">
+                                                <span className="text-[10px] text-zinc-500 uppercase font-black italic">Account Number</span>
+                                                <div className="flex items-center gap-2">
+                                                   <span className="text-orange-500 font-black italic text-lg">{pDetails.accountNumber}</span>
+                                                   <button type="button" onClick={() => handleCopyText(pDetails.accountNumber, `number-${order.id}`)} className="text-orange-500 hover:text-white transition-colors">
+                                                      {copiedField === `number-${order.id}` ? <span className="text-[9px] text-emerald-500 font-bold">Copied!</span> : <Copy className="w-3.5 h-3.5" />}
+                                                   </button>
+                                                </div>
+                                             </div>
+                                          </>
+                                       );
+                                    })()}
                                  </div>
                                  <p className="text-[10px] text-zinc-500 text-center italic">Transfer exactly <span className="text-white font-bold">{order.amountEtb} ETB</span> to avoid delays.</p>
                               </div>
@@ -1099,6 +1206,34 @@ export const P2PPage = () => {
                                   <div className="text-center">
                                      <h4 className="text-xl font-black text-white uppercase italic tracking-tighter">Payment Received!</h4>
                                      <p className="text-zinc-500 text-[10px] italic mt-1 italic tracking-widest">Verify the receipt in your account before releasing funds.</p>
+                                  </div>
+
+                                  <div className="bg-black/40 p-4 rounded-xl border border-zinc-800 space-y-2">
+                                     <p className="text-[10px] text-emerald-500 font-black uppercase italic tracking-widest">Expected Recipient Details</p>
+                                     {(() => {
+                                        const pDetails = getRecipientPaymentDetails(order);
+                                        return (
+                                           <div className="grid grid-cols-2 gap-2 text-xs">
+                                              <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800">
+                                                 <p className="text-[8px] text-zinc-500 uppercase text-left">Bank / Method</p>
+                                                 <p className="font-bold text-white uppercase text-left">{pDetails.bankName}</p>
+                                              </div>
+                                              <div className="bg-zinc-900/60 p-2 rounded-lg border border-zinc-800">
+                                                 <p className="text-[8px] text-zinc-500 uppercase text-left">Account Holder</p>
+                                                 <p className="font-bold text-white text-left">{pDetails.accountName}</p>
+                                              </div>
+                                              <div className="col-span-2 bg-zinc-900/60 p-2 rounded-lg border border-zinc-800 flex justify-between items-center">
+                                                 <div className="text-left">
+                                                    <p className="text-[8px] text-zinc-500 uppercase">Account Number</p>
+                                                    <p className="font-bold text-emerald-400 text-sm">{pDetails.accountNumber}</p>
+                                                 </div>
+                                                 <button type="button" onClick={() => handleCopyText(pDetails.accountNumber, `seller-num-${order.id}`)} className="text-zinc-500 hover:text-white transition-colors">
+                                                    {copiedField === `seller-num-${order.id}` ? <span className="text-[9px] text-emerald-500 font-bold font-medium mb-1">Copied!</span> : <Copy className="w-3.5 h-3.5" />}
+                                                 </button>
+                                              </div>
+                                           </div>
+                                        );
+                                     })()}
                                   </div>
                                </div>
 
@@ -1262,28 +1397,54 @@ export const P2PPage = () => {
       )}
 
       {/* Modals */}
-      {showTradeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-           <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] w-full max-w-lg">
-              <h2 className="text-2xl font-black text-white italic uppercase mb-6">Trade with {showTradeModal.merchant.businessName}</h2>
-              <div className="space-y-4">
-                 <div className="grid grid-cols-2 gap-4">
-                    <input type="number" placeholder="Pay ETB" value={tradeAmount.etb} onChange={(e) => handleTradeAmountChange(e.target.value, 'etb', showTradeModal.price)} className="bg-black border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-orange-500" />
-                    <input type="number" placeholder="Receive USDT" value={tradeAmount.usdt} onChange={(e) => handleTradeAmountChange(e.target.value, 'usdt', showTradeModal.price)} className="bg-black border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500" />
-                 </div>
-                 <div className="grid grid-cols-2 gap-2">
-                    {['Telebirr', 'CBE Bank'].map(m => (
-                       <button key={m} onClick={() => setSelectedPayment(m)} className={`py-3 rounded-xl border text-[10px] font-black uppercase italic ${selectedPayment === m ? 'bg-orange-600 border-orange-500 text-white' : 'bg-black border-zinc-800 text-zinc-500'}`}>{m}</button>
-                    ))}
-                 </div>
-                 <div className="flex gap-4">
-                    <button onClick={() => setShowTradeModal(null)} className="flex-1 py-4 text-zinc-500 uppercase italic font-bold">Cancel</button>
-                    <button onClick={handleCreateOrder} disabled={!tradeAmount.usdt} className="flex-1 py-4 bg-white text-black font-black rounded-2xl uppercase italic">Continue</button>
-                 </div>
-              </div>
-           </motion.div>
-        </div>
-      )}
+      {showTradeModal && (() => {
+         const adMethods = showTradeModal.paymentMethods 
+           ? showTradeModal.paymentMethods.split(',').map((p: any) => p.trim().toUpperCase()).filter(Boolean)
+           : [];
+         const merchantMethods = showTradeModal.merchant?.user?.paymentMethods
+           ? showTradeModal.merchant.user.paymentMethods.filter((pm: any) => pm.isEnabled).map((pm: any) => pm.bankName.trim().toUpperCase())
+           : [];
+         const validIntersection = adMethods.filter((method: any) => merchantMethods.includes(method));
+
+         return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+               <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] w-full max-w-lg">
+                  <h2 className="text-2xl font-black text-white italic uppercase mb-6">Trade with {showTradeModal.merchant.businessName}</h2>
+                  <div className="space-y-4">
+                     <div className="grid grid-cols-2 gap-4">
+                        <input type="number" placeholder="Pay ETB" value={tradeAmount.etb} onChange={(e) => handleTradeAmountChange(e.target.value, 'etb', showTradeModal.price)} className="bg-black border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-orange-500" />
+                        <input type="number" placeholder="Receive USDT" value={tradeAmount.usdt} onChange={(e) => handleTradeAmountChange(e.target.value, 'usdt', showTradeModal.price)} className="bg-black border border-zinc-800 p-4 rounded-xl text-white outline-none focus:border-emerald-500" />
+                     </div>
+                     <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic block mb-1">Select Payment Settlement Method</label>
+                        {validIntersection.length === 0 ? (
+                           <div className="p-3 bg-red-955/20 border border-red-900/40 text-red-500 font-bold text-center rounded-xl text-xs">
+                              No matching enabled payment methods found between this ad and the merchant's profile.
+                           </div>
+                        ) : (
+                           <div className="grid grid-cols-2 gap-2">
+                              {validIntersection.map((m: string) => (
+                                 <button 
+                                    key={m} 
+                                    type="button"
+                                    onClick={() => setSelectedPayment(m)} 
+                                    className={`py-3 px-2 rounded-xl border text-[10px] font-black uppercase italic tracking-tight transition-all text-center flex items-center justify-center ${selectedPayment === m ? 'bg-orange-600 border-orange-500 text-white shadow-lg shadow-orange-600/10' : 'bg-black border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                                 >
+                                    {getPaymentMethodLabel(m)}
+                                 </button>
+                              ))}
+                           </div>
+                        )}
+                     </div>
+                     <div className="flex gap-4">
+                        <button onClick={() => setShowTradeModal(null)} className="flex-1 py-4 text-zinc-500 uppercase italic font-bold border border-zinc-800 rounded-xl hover:bg-zinc-800">Cancel</button>
+                        <button onClick={handleCreateOrder} disabled={!tradeAmount.usdt || !selectedPayment} className="flex-1 py-4 bg-white text-black font-black rounded-2xl uppercase italic disabled:opacity-30 disabled:cursor-not-allowed">Continue</button>
+                     </div>
+                  </div>
+               </motion.div>
+            </div>
+         );
+      })()}
 
       {showAdModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -1343,6 +1504,18 @@ export const P2PPage = () => {
                          className="w-full bg-black border border-zinc-800 rounded-xl px-4 pt-6 pb-3 text-white text-lg font-black italic outline-none focus:border-orange-500 transition-all" 
                        />
                        <p className="text-[8px] text-zinc-500 italic mt-1 ml-4 uppercase">Suggested: {(adForm.type === 'SELL' ? adminRates.sellRate : adminRates.buyRate) * 0.98} - {(adForm.type === 'SELL' ? adminRates.sellRate : adminRates.buyRate)}</p>
+                     </div>
+
+                     <div className="relative group">
+                        <label className="absolute left-4 top-2 text-[8px] font-black text-zinc-500 uppercase tracking-widest italic">P2P Ad Display Name (Optional)</label>
+                        <input 
+                          placeholder="Leaves empty to use profile name" 
+                          type="text" 
+                          value={adForm.adDisplayName || ''} 
+                          onChange={e => setAdForm({...adForm, adDisplayName: e.target.value})} 
+                          className="w-full bg-black border border-zinc-800 rounded-xl px-4 pt-6 pb-3 text-white font-black italic text-sm outline-none focus:border-orange-500 transition-all" 
+                        />
+                        <p className="text-[8px] text-zinc-500 italic mt-1 ml-4 uppercase">Used ONLY on P2P marketplace listings to customize ad title. Orders & official profile views always use your certified full name.</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -1359,30 +1532,37 @@ export const P2PPage = () => {
                     <div className="space-y-1.5 border-t border-zinc-900 pt-3">
                        <label className="text-[10px] font-black text-zinc-500 uppercase tracking-widest italic block mb-1">Accepted Settlement Options</label>
                        <div className="grid grid-cols-2 gap-2 text-xs">
-                         {['CBE', 'Telebirr', 'Abyssinia', 'Dashen', 'Awash', 'CBE Birr'].map(method => {
-                            const isChecked = adPaymentMethods.includes(method);
-                            return (
-                               <button
-                                  key={method}
-                                  type="button"
-                                  onClick={() => {
-                                     if (isChecked) {
-                                        setAdPaymentMethods(adPaymentMethods.filter(m => m !== method));
-                                     } else {
-                                        setAdPaymentMethods([...adPaymentMethods, method]);
-                                     }
-                                  }}
-                                  className={`py-2 px-3 rounded-lg border text-[11px] font-bold text-left flex items-center justify-between transition-all ${
-                                     isChecked 
-                                        ? 'bg-orange-600/10 border-orange-500 text-orange-400' 
-                                        : 'bg-black border-zinc-800 text-zinc-500 hover:border-zinc-700'
-                                  }`}
-                               >
-                                  <span>{method}</span>
-                                  {isChecked && <span className="text-[10px]">✓</span>}
-                               </button>
-                            );
-                         })}
+                         {userEnabledPMs.length === 0 ? (
+                           <div className="col-span-2 p-3 bg-red-950/20 border border-red-900/40 text-red-500 font-bold text-center rounded-xl text-[10px]">
+                             No enabled payment methods found in your profile. Please configure them in Profile settings before publishing ads.
+                           </div>
+                         ) : (
+                           userEnabledPMs.map(pm => {
+                             const method = pm.bankName.trim().toUpperCase();
+                             const isChecked = adPaymentMethods.map(m => m.trim().toUpperCase()).includes(method);
+                             return (
+                                <button
+                                   key={pm.id}
+                                   type="button"
+                                   onClick={() => {
+                                      if (isChecked) {
+                                         setAdPaymentMethods(adPaymentMethods.filter(m => m.trim().toUpperCase() !== method));
+                                      } else {
+                                         setAdPaymentMethods([...adPaymentMethods, method]);
+                                      }
+                                   }}
+                                   className={`py-2 px-3 rounded-lg border text-[11px] font-bold text-left flex items-center justify-between transition-all ${
+                                      isChecked 
+                                         ? 'bg-orange-600/10 border-orange-500 text-orange-400' 
+                                         : 'bg-black border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                                   }`}
+                                >
+                                   <span>{getPaymentMethodLabel(method)}</span>
+                                   {isChecked && <span className="text-[10px]">✓</span>}
+                                </button>
+                             );
+                           })
+                         )}
                        </div>
                     </div>
                  </div>
@@ -1401,7 +1581,11 @@ export const P2PPage = () => {
            <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="bg-zinc-900 border border-zinc-800 p-8 rounded-[2rem] w-full max-w-md">
               <form onSubmit={handleApplyMerchant} className="space-y-4">
                  <h2 className="text-xl font-black text-white italic uppercase">Apply Merchant</h2>
-                 <input placeholder="Business Name" required value={merchantForm.businessName} onChange={e => setMerchantForm({...merchantForm, businessName: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white" />
+                 <div className="bg-black/40 border border-zinc-800 p-4 rounded-xl space-y-1">
+                    <p className="text-[10px] text-zinc-500 uppercase font-black italic">Merchant Display Name</p>
+                    <p className="text-white font-black italic">{user?.name || user?.email?.split('@')[0] || 'My Account'}</p>
+                    <p className="text-[9px] text-zinc-500 italic">Your merchant name is linked directly to your profile name for consistent and trusted trade certification.</p>
+                 </div>
                  <input placeholder="Phone/PaymentID" required value={merchantForm.phoneNumber} onChange={e => setMerchantForm({...merchantForm, phoneNumber: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white" />
                  <textarea placeholder="Bio" value={merchantForm.bio} onChange={e => setMerchantForm({...merchantForm, bio: e.target.value})} className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-white h-24" />
                  <div className="flex gap-4">
