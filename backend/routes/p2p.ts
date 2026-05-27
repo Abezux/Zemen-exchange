@@ -476,7 +476,10 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
 
       // Check for idempotency if provided
       if (idempotencyKey) {
-        const existing = await tx.p2POrder.findUnique({ where: { idempotencyKey } });
+        const existing = await tx.p2POrder.findUnique({
+          where: { idempotencyKey },
+          include: { merchant: { include: { user: true } } }
+        });
         if (existing) return existing;
       }
 
@@ -513,43 +516,57 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
 
     await logAction(buyerId, "P2P_ORDER_CREATED", { orderId: result.id });
 
-    // Notify participants in real-time
-    const isSellAd = result.type === "SELL";
-    const formattedQty = qty.toFixed(2);
-    const formattedFiat = fiatAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // Notify participants in real-time - entirely non-blocking and isolated
+    try {
+      const isSellAd = result.type === "SELL";
+      const formattedQty = result.amountUsdt.toFixed(2);
+      const formattedFiat = result.amountEtb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    if (isSellAd) {
-      // Creator is BUYER, Merchant is SELLER
-      await sendNotification(
-        buyerId,
-        "ORDER_CREATED",
-        "P2P Buy Order Initiated",
-        `Your buy order #${result.id.slice(-6)} for ${formattedQty} USDT is active. Please pay ${formattedFiat} ETB.`,
-        { orderId: result.id, role: "BUYER" }
-      );
-      await sendNotification(
-        result.merchant.userId,
-        "ORDER_CREATED",
-        "New P2P Sell Order Received",
-        `A buyer has opened order #${result.id.slice(-6)} to purchase ${formattedQty} USDT for ${formattedFiat} ETB.`,
-        { orderId: result.id, role: "SELLER" }
-      );
-    } else {
-      // Creator is SELLER, Merchant is BUYER
-      await sendNotification(
-        buyerId,
-        "ORDER_CREATED",
-        "P2P Sell Order Locked",
-        `Your sell order #${result.id.slice(-6)} for ${formattedQty} USDT is locked in Escrow. Wait for the buyer's payment.`,
-        { orderId: result.id, role: "SELLER" }
-      );
-      await sendNotification(
-        result.merchant.userId,
-        "ORDER_CREATED",
-        "New P2P Buy Order Received",
-        `You have an active order #${result.id.slice(-6)} to buy ${formattedQty} USDT. Please pay ${formattedFiat} ETB to matching seller.`,
-        { orderId: result.id, role: "BUYER" }
-      );
+      if (isSellAd) {
+        // Creator is BUYER, Merchant is SELLER
+        sendNotification(
+          buyerId,
+          "ORDER_CREATED",
+          "P2P Buy Order Initiated",
+          `Your buy order #${result.id.slice(-6)} for ${formattedQty} USDT is active. Please pay ${formattedFiat} ETB.`,
+          { orderId: result.id, role: "BUYER" }
+        ).catch(err => {
+          console.error(`[P2P Order Create Notification Error] Failed to notify buyer:`, err);
+        });
+
+        sendNotification(
+          result.merchant.userId,
+          "ORDER_CREATED",
+          "New P2P Sell Order Received",
+          `A buyer has opened order #${result.id.slice(-6)} to purchase ${formattedQty} USDT for ${formattedFiat} ETB.`,
+          { orderId: result.id, role: "SELLER" }
+        ).catch(err => {
+          console.error(`[P2P Order Create Notification Error] Failed to notify merchant:`, err);
+        });
+      } else {
+        // Creator is SELLER, Merchant is BUYER
+        sendNotification(
+          buyerId,
+          "ORDER_CREATED",
+          "P2P Sell Order Locked",
+          `Your sell order #${result.id.slice(-6)} for ${formattedQty} USDT is locked in Escrow. Wait for the buyer's payment.`,
+          { orderId: result.id, role: "SELLER" }
+        ).catch(err => {
+          console.error(`[P2P Order Create Notification Error] Failed to notify seller:`, err);
+        });
+
+        sendNotification(
+          result.merchant.userId,
+          "ORDER_CREATED",
+          "New P2P Buy Order Received",
+          `You have an active order #${result.id.slice(-6)} to buy ${formattedQty} USDT. Please pay ${formattedFiat} ETB to matching seller.`,
+          { orderId: result.id, role: "BUYER" }
+        ).catch(err => {
+          console.error(`[P2P Order Create Notification Error] Failed to notify merchant buyer:`, err);
+        });
+      }
+    } catch (notifErr) {
+      console.error("[P2P Order Create Notification Error] Critical notification routing failure:", notifErr);
     }
 
     res.json(result);
@@ -616,21 +633,29 @@ router.post("/orders/:id/paid", authenticate, checkNotFrozen, upload.single("pro
     const buyerId = result.type === "SELL" ? result.creatorId : result.merchant.userId;
     const sellerId = result.type === "SELL" ? result.merchant.userId : result.creatorId;
 
-    await sendNotification(
-      buyerId,
-      "ORDER_PAID",
-      "P2P Order Marked Paid",
-      `You marked order #${result.id.slice(-6)} as PAID. The seller has been requested to inspect payment and release USDT.`,
-      { orderId: result.id, role: "BUYER" }
-    );
+    try {
+      sendNotification(
+        buyerId,
+        "ORDER_PAID",
+        "P2P Order Marked Paid",
+        `You marked order #${result.id.slice(-6)} as PAID. The seller has been requested to inspect payment and release USDT.`,
+        { orderId: result.id, role: "BUYER" }
+      ).catch(err => {
+        console.error(`[P2P Paid Notification Error] Failed to notify buyer:`, err);
+      });
 
-    await sendNotification(
-      sellerId,
-      "ORDER_PAID",
-      "P2P Payment Confirmation Received",
-      `The buyer of order #${result.id.slice(-6)} has submitted payment proof. Please verify receipt and release the escrow USDT.`,
-      { orderId: result.id, role: "SELLER" }
-    );
+      sendNotification(
+        sellerId,
+        "ORDER_PAID",
+        "P2P Payment Confirmation Received",
+        `The buyer of order #${result.id.slice(-6)} has submitted payment proof. Please verify receipt and release the escrow USDT.`,
+        { orderId: result.id, role: "SELLER" }
+      ).catch(err => {
+        console.error(`[P2P Paid Notification Error] Failed to notify seller:`, err);
+      });
+    } catch (notifErr) {
+      console.error("[P2P Paid Notification Error] Critical notification layout failure:", notifErr);
+    }
 
     res.json({ success: true });
   } catch (error: any) {
@@ -689,21 +714,29 @@ router.post("/orders/:id/release", authenticate, checkNotFrozen, async (req: Aut
     const buyerId = result.type === "SELL" ? result.creatorId : result.merchant.userId;
     const sellerId = result.type === "SELL" ? result.merchant.userId : result.creatorId;
 
-    await sendNotification(
-      buyerId,
-      "ORDER_RELEASED",
-      "P2P Escrow Released! 🚀",
-      `The seller has released ${result.amountUsdt.toFixed(2)} USDT. Funds are now available in your wallet.`,
-      { orderId: result.id, role: "BUYER" }
-    );
+    try {
+      sendNotification(
+        buyerId,
+        "ORDER_RELEASED",
+        "P2P Escrow Released! 🚀",
+        `The seller has released ${result.amountUsdt.toFixed(2)} USDT. Funds are now available in your wallet.`,
+        { orderId: result.id, role: "BUYER" }
+      ).catch(err => {
+        console.error(`[P2P Release Notification Error] Failed to notify buyer:`, err);
+      });
 
-    await sendNotification(
-      sellerId,
-      "ORDER_RELEASED",
-      "P2P Order Completed Successfully",
-      `You released ${result.amountUsdt.toFixed(2)} USDT for order #${result.id.slice(-6)}. Escrow locked balance updated.`,
-      { orderId: result.id, role: "SELLER" }
-    );
+      sendNotification(
+        sellerId,
+        "ORDER_RELEASED",
+        "P2P Order Completed Successfully",
+        `You released ${result.amountUsdt.toFixed(2)} USDT for order #${result.id.slice(-6)}. Escrow locked balance updated.`,
+        { orderId: result.id, role: "SELLER" }
+      ).catch(err => {
+        console.error(`[P2P Release Notification Error] Failed to notify seller:`, err);
+      });
+    } catch (notifErr) {
+      console.error("[P2P Release Notification Error] Critical notification routing failure:", notifErr);
+    }
 
     res.json({ success: true });
   } catch (error: any) {
@@ -776,21 +809,29 @@ router.post("/orders/:id/cancel", authenticate, checkNotFrozen, async (req: Auth
     const buyerId = result.type === "SELL" ? result.creatorId : result.merchant.userId;
     const sellerId = result.type === "SELL" ? result.merchant.userId : result.creatorId;
 
-    await sendNotification(
-      buyerId,
-      "ORDER_CANCELLED",
-      "P2P Order Cancelled",
-      `Order #${result.id.slice(-6)} has been cancelled. Any locked balances have been refunded.`,
-      { orderId: result.id, role: "BUYER" }
-    );
+    try {
+      sendNotification(
+        buyerId,
+        "ORDER_CANCELLED",
+        "P2P Order Cancelled",
+        `Order #${result.id.slice(-6)} has been cancelled. Any locked balances have been refunded.`,
+        { orderId: result.id, role: "BUYER" }
+      ).catch(err => {
+        console.error(`[P2P Cancel Notification Error] Failed to notify buyer:`, err);
+      });
 
-    await sendNotification(
-      sellerId,
-      "ORDER_CANCELLED",
-      "P2P Order Cancelled",
-      `Order #${result.id.slice(-6)} has been cancelled. Escrow locked crypto has been restored.`,
-      { orderId: result.id, role: "SELLER" }
-    );
+      sendNotification(
+        sellerId,
+        "ORDER_CANCELLED",
+        "P2P Order Cancelled",
+        `Order #${result.id.slice(-6)} has been cancelled. Escrow locked crypto has been restored.`,
+        { orderId: result.id, role: "SELLER" }
+      ).catch(err => {
+        console.error(`[P2P Cancel Notification Error] Failed to notify seller:`, err);
+      });
+    } catch (notifErr) {
+      console.error("[P2P Cancel Notification Error] Critical notification routing failure:", notifErr);
+    }
 
     res.json({ success: true });
   } catch (error: any) {
@@ -831,21 +872,29 @@ router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: Aut
     const buyerId = result.type === "SELL" ? result.creatorId : result.merchant.userId;
     const sellerId = result.type === "SELL" ? result.merchant.userId : result.creatorId;
 
-    await sendNotification(
-      buyerId,
-      "ORDER_DISPUTED",
-      "P2P Conflict: Dispute Opened ⚠️",
-      `A support dispute has been submitted for trade #${result.id.slice(-6)}. Zemen desk is reviewing payment proofs.`,
-      { orderId: result.id, reason }
-    );
+    try {
+      sendNotification(
+        buyerId,
+        "ORDER_DISPUTED",
+        "P2P Conflict: Dispute Opened ⚠️",
+        `A support dispute has been submitted for trade #${result.id.slice(-6)}. Zemen desk is reviewing payment proofs.`,
+        { orderId: result.id, reason }
+      ).catch(err => {
+        console.error(`[P2P Dispute Notification Error] Failed to notify buyer:`, err);
+      });
 
-    await sendNotification(
-      sellerId,
-      "ORDER_DISPUTED",
-      "P2P Conflict: Dispute Opened ⚠️",
-      `A support dispute has been submitted for trade #${result.id.slice(-6)}. Zemen desk is reviewing payment proofs.`,
-      { orderId: result.id, reason }
-    );
+      sendNotification(
+        sellerId,
+        "ORDER_DISPUTED",
+        "P2P Conflict: Dispute Opened ⚠️",
+        `A support dispute has been submitted for trade #${result.id.slice(-6)}. Zemen desk is reviewing payment proofs.`,
+        { orderId: result.id, reason }
+      ).catch(err => {
+        console.error(`[P2P Dispute Notification Error] Failed to notify seller:`, err);
+      });
+    } catch (notifErr) {
+      console.error("[P2P Dispute Notification Error] Critical notification routing failure:", notifErr);
+    }
 
     res.json({ success: true });
   } catch (error: any) {
@@ -853,7 +902,14 @@ router.post("/orders/:id/dispute", authenticate, checkNotFrozen, async (req: Aut
   }
 });
 
+let isExpiryCheckRunning = false;
+
 export async function runExpiryCheck() {
+  if (isExpiryCheckRunning) {
+    console.log("[P2P Worker] Expiry check already in progress, skipping.");
+    return;
+  }
+  isExpiryCheckRunning = true;
   try {
     const expiredOrders = await prisma.p2POrder.findMany({
       where: {
@@ -861,6 +917,9 @@ export async function runExpiryCheck() {
         expiresAt: {
           lt: new Date()
         }
+      },
+      select: {
+        id: true
       }
     });
 
@@ -924,21 +983,26 @@ export async function runExpiryCheck() {
           const buyerId = freshOrder.type === "SELL" ? freshOrder.creatorId : freshOrder.merchant.userId;
           const sellerId = freshOrder.type === "SELL" ? freshOrder.merchant.userId : freshOrder.creatorId;
 
-          await sendNotification(
+          // Dispatch notifications asynchronously to avoid blocking the worker loop or DB transaction flow
+          sendNotification(
             buyerId,
             "ORDER_EXPIRED",
             "Payment Window Expired",
             `Your P2P order #${freshOrder.id.slice(-6)} has expired because the 15-minute payment window closed.`,
             { orderId: freshOrder.id }
-          );
+          ).catch(err => {
+            console.error(`[P2P Worker Error] Failed to send buyer expiration notification for ${freshOrder.id}:`, err);
+          });
 
-          await sendNotification(
+          sendNotification(
             sellerId,
             "ORDER_EXPIRED",
             "Payment Window Expired",
             `P2P trade #${freshOrder.id.slice(-6)} expired. Locked funds have been returned to you safely.`,
             { orderId: freshOrder.id }
-          );
+          ).catch(err => {
+            console.error(`[P2P Worker Error] Failed to send seller expiration notification for ${freshOrder.id}:`, err);
+          });
         }
       } catch (err) {
         console.error(`[P2P Worker] Error expiring order ${order.id}:`, err);
@@ -946,6 +1010,8 @@ export async function runExpiryCheck() {
     }
   } catch (err) {
     console.error("[P2P Worker] Error running expiry check:", err);
+  } finally {
+    isExpiryCheckRunning = false;
   }
 }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
@@ -9,6 +9,7 @@ import { AdminPage } from './pages/AdminPage.tsx';
 import { P2PPage } from './pages/P2PPage.tsx';
 import { ProfilePage } from './pages/ProfilePage.tsx';
 import { useAuthStore } from './store/authStore.ts';
+import { useNotificationStore } from './store/notificationStore.ts';
 
 const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: string }) => {
   const { isAuthenticated, user, isLoading } = useAuthStore();
@@ -28,6 +29,22 @@ const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: 
 };
 
 export default function App() {
+  const { user, isAuthenticated, checkAuth } = useAuthStore();
+  const initSocket = useNotificationStore((state) => state.init);
+  const disconnectSocket = useNotificationStore((state) => state.disconnect);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.id) {
+      initSocket(user.id);
+    } else {
+      disconnectSocket();
+    }
+  }, [isAuthenticated, user?.id, initSocket, disconnectSocket]);
+
   return (
     <BrowserRouter>
       <Routes>
