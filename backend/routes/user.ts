@@ -108,24 +108,14 @@ router.patch("/profile", authenticate, upload.single("avatar"), async (req: Auth
       include: { wallet: true, merchant: true, paymentMethods: true }
     });
 
-    // Ensure merchant creation or updates triggered from profile actions always result in: status: "PENDING"
+    // Synchronize merchant business name or bio if they change, but preserve approval status and account state (P1 Badge)
     const existingMerchant = await prisma.merchant.findUnique({ where: { userId } });
     if (existingMerchant) {
       await prisma.merchant.update({
         where: { id: existingMerchant.id },
         data: {
           businessName: updatedUser.name || updatedUser.email.split("@")[0],
-          bio: updatedUser.bio !== undefined ? updatedUser.bio : existingMerchant.bio,
-          status: "PENDING"
-        }
-      });
-
-      // Synchronize User model properties to prevent stale merchant/verified states
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          accountType: "user",
-          verificationStatus: "pending"
+          bio: updatedUser.bio !== undefined ? updatedUser.bio : existingMerchant.bio
         }
       });
     }

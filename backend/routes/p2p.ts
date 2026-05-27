@@ -509,63 +509,117 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
   const qty = Math.max(0, parseFloat(amountUsdt));
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Precise Liquidity Lock
-      const ad = await tx.p2PAd.findUnique({
-        where: { id: adId },
-        include: { merchant: { include: { user: { include: { paymentMethods: true } } } } }
+    // 1. Check idempotency if provided (Outside transaction)
+    if (idempotencyKey) {
+      const existing = await prisma.p2POrder.findUnique({
+        where: { idempotencyKey },
+        include: { 
+          ad: true,
+          creator: { include: { paymentMethods: true } },
+          merchant: { include: { user: { include: { paymentMethods: true } } } } 
+        }
       });
-      if (!ad || ad.status !== "ACTIVE") throw new Error("Ad inactive.");
-      if (ad.remainingAmount < qty) throw new Error("Insufficient ad liquidity.");
-
-      const fiatAmount = qty * ad.price;
-      if (fiatAmount < ad.minLimit || fiatAmount > ad.maxLimit) throw new Error("Trade limits violated.");
-
-      // Check paymentMethod intersection
-      const adMethods = ad.paymentMethods ? ad.paymentMethods.split(",").map(p => p.trim().toUpperCase()) : [];
-      
-      // Get merchant profile payment methods
-      const merchantProfileMethods = await tx.userPaymentMethod.findMany({
-        where: { userId: ad.merchant.userId, isEnabled: true }
-      });
-      const merchantProfileBankNames = merchantProfileMethods.map(m => m.bankName.trim().toUpperCase());
-
-      // Intersection elements
-      const intersection = adMethods.filter(method => merchantProfileBankNames.includes(method));
-
-      if (!paymentMethod) {
-        throw new Error("Payment method selection is required.");
+      if (existing) {
+        return res.json(existing);
       }
+    }
 
-      if (!intersection.includes(paymentMethod.trim().toUpperCase())) {
-        throw new Error("Selected payment method is not part of the merchant's profile and ad intersection.");
-      }
-
-      // Check for idempotency if provided
-      if (idempotencyKey) {
-        const existing = await tx.p2POrder.findUnique({
-          where: { idempotencyKey },
+    // 2. Fetch the ad along with merchant and user's payment methods (Outside transaction)
+    const ad = await prisma.p2PAd.findUnique({
+      where: { id: adId },
+      include: { 
+        merchant: { 
           include: { 
-            ad: true,
-            creator: { include: { paymentMethods: true } },
-            merchant: { include: { user: { include: { paymentMethods: true } } } } 
-          }
-        });
-        if (existing) return existing;
+            user: { 
+              include: { 
+                paymentMethods: true 
+              } 
+            } 
+          } 
+        } 
+      }
+    });
+
+    if (!ad || ad.status !== "ACTIVE") {
+      return res.status(400).json({ error: "Ad inactive." });
+    }
+
+    if (ad.remainingAmount < qty) {
+      return res.status(400).json({ error: "Insufficient ad liquidity." });
+    }
+
+    // Compute fiat amount
+    const fiatAmount = qty * ad.price;
+
+    // Validate limit checks
+    if (fiatAmount < ad.minLimit || fiatAmount > ad.maxLimit) {
+      return res.status(400).json({ error: "Trade limits violated." });
+    }
+
+    if (!paymentMethod) {
+      return res.status(400).json({ error: "Payment method selection is required." });
+    }
+
+    const trimmedPm = paymentMethod.trim().toUpperCase();
+
+    // Intersection verification
+    const adMethods = ad.paymentMethods ? ad.paymentMethods.split(",").map(p => p.trim().toUpperCase()) : [];
+    const merchantProfileMethods = ad.merchant.user.paymentMethods.filter((m: any) => m.isEnabled);
+    const merchantProfileBankNames = merchantProfileMethods.map((m: any) => m.bankName.trim().toUpperCase());
+    const intersection = adMethods.filter(method => merchantProfileBankNames.includes(method));
+
+    if (!intersection.includes(trimmedPm)) {
+      return res.status(400).json({ error: "Selected payment method is not part of the merchant's profile and ad intersection." });
+    }
+
+    // Pre-check buyer wallet balance if Buy Ad (Merchant is BUYING, Creator is SELLING)
+    if (ad.type === "BUY") {
+      const buyerWallet = await prisma.wallet.findUnique({
+        where: { userId: buyerId }
+      });
+      if (!buyerWallet || buyerWallet.balance < qty) {
+        return res.status(400).json({ error: "Insufficient balance." });
       }
 
-      // 2. Escrow Management
-      if (ad.type === "BUY") {
-        // Merchant is buying, Creator is selling. Lock creator's funds.
+      // P2 Badge: Validate the recipient's (USDT seller's) payment method for BUY ads
+      const creatorPMs = await prisma.userPaymentMethod.findMany({
+        where: { userId: buyerId, isEnabled: true }
+      });
+      const creatorPMBankNames = creatorPMs.map((m: any) => m.bankName.trim().toUpperCase());
+      if (!creatorPMBankNames.includes(trimmedPm)) {
+        return res.status(400).json({ error: "Please configure and enable this payment method in your profile in order to settle this trade." });
+      }
+    }
+
+    // 3. Mini, high-speed, interactive transaction with minimal DB operations and NO relation inclusion
+    const txResult = await prisma.$transaction(async (tx) => {
+      // Re-verify liquidity check inside transaction to prevent race conditions
+      const adLock = await tx.p2PAd.findUnique({
+        where: { id: adId },
+        select: { id: true, status: true, remainingAmount: true, merchantId: true, type: true }
+      });
+
+      if (!adLock || adLock.status !== "ACTIVE") {
+        throw new Error("Ad inactive.");
+      }
+
+      if (adLock.remainingAmount < qty) {
+        throw new Error("Insufficient ad liquidity.");
+      }
+
+      // Escrow Balance Management
+      if (adLock.type === "BUY") {
         const updatedWallet = await tx.wallet.update({
           where: { userId: buyerId },
           data: { balance: { decrement: qty }, lockedBalance: { increment: qty } }
         });
-        if (updatedWallet.balance < 0) throw new Error("Insufficient balance.");
+        if (updatedWallet.balance < 0) {
+          throw new Error("Insufficient balance.");
+        }
       }
 
       // Update Ad remaining liquidity
-      const remaining = Math.max(0, ad.remainingAmount - qty);
+      const remaining = Math.max(0, adLock.remainingAmount - qty);
       await tx.p2PAd.update({
         where: { id: adId },
         data: { 
@@ -574,28 +628,46 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
         }
       });
 
-      return await tx.p2POrder.create({
+      // Quick Order Creation with absolutely no includes
+      const newOrder = await tx.p2POrder.create({
         data: {
-          adId, creatorId: buyerId, merchantId: ad.merchantId, type: ad.type,
-          amountUsdt: qty, amountEtb: fiatAmount, status: "PENDING",
-          paymentMethod: paymentMethod.trim().toUpperCase(), idempotencyKey,
+          adId, 
+          creatorId: buyerId, 
+          merchantId: adLock.merchantId, 
+          type: adLock.type,
+          amountUsdt: qty, 
+          amountEtb: fiatAmount, 
+          status: "PENDING",
+          paymentMethod: trimmedPm, 
+          idempotencyKey,
           expiresAt: new Date(Date.now() + 15 * 60 * 1000)
-        },
-        include: { 
-          ad: true,
-          creator: { include: { paymentMethods: true } },
-          merchant: { include: { user: { include: { paymentMethods: true } } } } 
         }
       });
+
+      return { id: newOrder.id };
     });
 
-    await logAction(buyerId, "P2P_ORDER_CREATED", { orderId: result.id });
+    // 4. Load full order relationship details OUTSIDE transaction
+    const orderDetails = await prisma.p2POrder.findUnique({
+      where: { id: txResult.id },
+      include: { 
+        ad: true,
+        creator: { include: { paymentMethods: true } },
+        merchant: { include: { user: { include: { paymentMethods: true } } } } 
+      }
+    });
+
+    if (!orderDetails) {
+      return res.status(500).json({ error: "Failed to load order details." });
+    }
+
+    await logAction(buyerId, "P2P_ORDER_CREATED", { orderId: orderDetails.id });
 
     // Notify participants in real-time - entirely non-blocking and isolated
     try {
-      const isSellAd = result.type === "SELL";
-      const formattedQty = result.amountUsdt.toFixed(2);
-      const formattedFiat = result.amountEtb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const isSellAd = orderDetails.type === "SELL";
+      const formattedQty = orderDetails.amountUsdt.toFixed(2);
+      const formattedFiat = orderDetails.amountEtb.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
       if (isSellAd) {
         // Creator is BUYER, Merchant is SELLER
@@ -603,18 +675,18 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
           buyerId,
           "ORDER_CREATED",
           "P2P Buy Order Initiated",
-          `Your buy order #${result.id.slice(-6)} for ${formattedQty} USDT is active. Please pay ${formattedFiat} ETB.`,
-          { orderId: result.id, role: "BUYER" }
+          `Your buy order #${orderDetails.id.slice(-6)} for ${formattedQty} USDT is active. Please pay ${formattedFiat} ETB.`,
+          { orderId: orderDetails.id, role: "BUYER" }
         ).catch(err => {
           console.error(`[P2P Order Create Notification Error] Failed to notify buyer:`, err);
         });
 
         sendNotification(
-          result.merchant.userId,
+          orderDetails.merchant.userId,
           "ORDER_CREATED",
           "New P2P Sell Order Received",
-          `A buyer has opened order #${result.id.slice(-6)} to purchase ${formattedQty} USDT for ${formattedFiat} ETB.`,
-          { orderId: result.id, role: "SELLER" }
+          `A buyer has opened order #${orderDetails.id.slice(-6)} to purchase ${formattedQty} USDT for ${formattedFiat} ETB.`,
+          { orderId: orderDetails.id, role: "SELLER" }
         ).catch(err => {
           console.error(`[P2P Order Create Notification Error] Failed to notify merchant:`, err);
         });
@@ -624,18 +696,18 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
           buyerId,
           "ORDER_CREATED",
           "P2P Sell Order Locked",
-          `Your sell order #${result.id.slice(-6)} for ${formattedQty} USDT is locked in Escrow. Wait for the buyer's payment.`,
-          { orderId: result.id, role: "SELLER" }
+          `Your sell order #${orderDetails.id.slice(-6)} for ${formattedQty} USDT is locked in Escrow. Wait for the buyer's payment.`,
+          { orderId: orderDetails.id, role: "SELLER" }
         ).catch(err => {
           console.error(`[P2P Order Create Notification Error] Failed to notify seller:`, err);
         });
 
         sendNotification(
-          result.merchant.userId,
+          orderDetails.merchant.userId,
           "ORDER_CREATED",
           "New P2P Buy Order Received",
-          `You have an active order #${result.id.slice(-6)} to buy ${formattedQty} USDT. Please pay ${formattedFiat} ETB to matching seller.`,
-          { orderId: result.id, role: "BUYER" }
+          `You have an active order #${orderDetails.id.slice(-6)} to buy ${formattedQty} USDT. Please pay ${formattedFiat} ETB to matching seller.`,
+          { orderId: orderDetails.id, role: "BUYER" }
         ).catch(err => {
           console.error(`[P2P Order Create Notification Error] Failed to notify merchant buyer:`, err);
         });
@@ -644,9 +716,9 @@ router.post("/orders", authenticate, checkNotFrozen, async (req: AuthRequest, re
       console.error("[P2P Order Create Notification Error] Critical notification routing failure:", notifErr);
     }
 
-    res.json(result);
+    return res.json(orderDetails);
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: error.message });
   }
 });
 
