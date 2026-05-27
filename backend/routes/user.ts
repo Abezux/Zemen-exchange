@@ -89,7 +89,8 @@ router.get("/me", authenticate, async (req: AuthRequest, res: Response) => {
 router.patch("/profile", authenticate, upload.single("avatar"), async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.user!.id;
-    const { name, bio, avatarUrl, verificationStatus, accountType } = req.body;
+    // Strictly destructure only name, bio, avatarUrl to ignore all other incoming fields silently
+    const { name, bio, avatarUrl } = req.body;
 
     let finalAvatarUrl = avatarUrl;
     if (req.file) {
@@ -100,14 +101,6 @@ router.patch("/profile", authenticate, upload.single("avatar"), async (req: Auth
     if (name !== undefined) updates.name = name;
     if (bio !== undefined) updates.bio = bio;
     if (finalAvatarUrl !== undefined) updates.avatarUrl = finalAvatarUrl;
-    if (verificationStatus !== undefined) updates.verificationStatus = verificationStatus;
-    if (accountType !== undefined) {
-      updates.accountType = accountType;
-      // Mirror to User Role if needed
-      if (accountType === "merchant") {
-        updates.role = "USER"; // Keeps default role as USER, but upgrades accountType
-      }
-    }
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -115,34 +108,26 @@ router.patch("/profile", authenticate, upload.single("avatar"), async (req: Auth
       include: { wallet: true, merchant: true, paymentMethods: true }
     });
 
-    // Mirror to merchant entry if role is upgraded to merchant
-    if (accountType === "merchant") {
-      const existingMerchant = await prisma.merchant.findUnique({ where: { userId } });
-      if (!existingMerchant) {
-        await prisma.merchant.create({
-          data: {
-            userId,
-            businessName: name || updatedUser.email.split("@")[0],
-            phoneNumber: "",
-            bio: bio || "",
-            status: "APPROVED" // Automatically approved for profile testing
-          }
-        });
-      } else if (existingMerchant.status !== "APPROVED") {
-        await prisma.merchant.update({
-          where: { id: existingMerchant.id },
-          data: { status: "APPROVED" }
-        });
-      }
-    } else if (accountType === "user") {
-      // Keep or disconnect merchant status if they downgrade
-      const existingMerchant = await prisma.merchant.findUnique({ where: { userId } });
-      if (existingMerchant) {
-        await prisma.merchant.update({
-          where: { id: existingMerchant.id },
-          data: { status: "REJECTED" } // Soft downgrade in application logic
-        });
-      }
+    // Ensure merchant creation or updates triggered from profile actions always result in: status: "PENDING"
+    const existingMerchant = await prisma.merchant.findUnique({ where: { userId } });
+    if (existingMerchant) {
+      await prisma.merchant.update({
+        where: { id: existingMerchant.id },
+        data: {
+          businessName: updatedUser.name || updatedUser.email.split("@")[0],
+          bio: updatedUser.bio !== undefined ? updatedUser.bio : existingMerchant.bio,
+          status: "PENDING"
+        }
+      });
+
+      // Synchronize User model properties to prevent stale merchant/verified states
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          accountType: "user",
+          verificationStatus: "pending"
+        }
+      });
     }
 
     res.json(updatedUser);
@@ -170,6 +155,19 @@ router.get("/payment-methods", authenticate, async (req: AuthRequest, res: Respo
   }
 });
 
+const ALLOWED_METHODS = ["CBE", "TELEBIRR", "ABYSSINIA", "DASHEN", "AWASH", "CBE BIRR"];
+
+const normalizeBackendBankName = (val: string): string => {
+  const clean = val.trim().toUpperCase();
+  if (clean.includes("CBE BIRR")) return "CBE BIRR";
+  if (clean.includes("CBE") || clean.includes("COMMERCIAL")) return "CBE";
+  if (clean.includes("TELEBIRR")) return "TELEBIRR";
+  if (clean.includes("ABYSSINIA") || clean.includes("BOA")) return "ABYSSINIA";
+  if (clean.includes("DASHEN")) return "DASHEN";
+  if (clean.includes("AWASH")) return "AWASH";
+  return clean;
+};
+
 // POST /api/user/payment-methods
 router.post("/payment-methods", authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -178,6 +176,11 @@ router.post("/payment-methods", authenticate, async (req: AuthRequest, res: Resp
 
     if (!bankName || !accountName || !accountNumber) {
       return res.status(400).json({ error: "Bank name, account name, and account number are required." });
+    }
+
+    const normalizedBank = normalizeBackendBankName(bankName);
+    if (!ALLOWED_METHODS.includes(normalizedBank)) {
+      return res.status(400).json({ error: `Invalid payment method: ${bankName}. Must be one of: ${ALLOWED_METHODS.join(", ")}` });
     }
 
     const defaultState = isDefault === true || isDefault === "true";
@@ -199,7 +202,7 @@ router.post("/payment-methods", authenticate, async (req: AuthRequest, res: Resp
       await tx.userPaymentMethod.create({
         data: {
           userId,
-          bankName,
+          bankName: normalizedBank,
           accountName,
           accountNumber,
           isDefault: finalIsDefault,
@@ -233,6 +236,14 @@ router.put("/payment-methods/:id", authenticate, async (req: AuthRequest, res: R
       return res.status(404).json({ error: "Payment method not found." });
     }
 
+    let normalizedBank = existing.bankName;
+    if (bankName) {
+      normalizedBank = normalizeBackendBankName(bankName);
+      if (!ALLOWED_METHODS.includes(normalizedBank)) {
+        return res.status(400).json({ error: `Invalid payment method: ${bankName}. Must be one of: ${ALLOWED_METHODS.join(", ")}` });
+      }
+    }
+
     const defaultState = isDefault === true || isDefault === "true";
     const enabledState = isEnabled !== false && isEnabled !== "false";
 
@@ -248,7 +259,7 @@ router.put("/payment-methods/:id", authenticate, async (req: AuthRequest, res: R
       await tx.userPaymentMethod.update({
         where: { id },
         data: {
-          bankName: bankName || existing.bankName,
+          bankName: normalizedBank,
           accountName: accountName || existing.accountName,
           accountNumber: accountNumber || existing.accountNumber,
           isDefault: defaultState,

@@ -310,6 +310,25 @@ router.post("/merchants/:id/approve", async (req: AuthRequest, res: Response) =>
       data: { status }
     });
     
+    // Synchronize to the associated User profile immediately
+    if (status === "APPROVED") {
+      await prisma.user.update({
+        where: { id: merchant.userId },
+        data: {
+          accountType: "merchant",
+          verificationStatus: "verified"
+        }
+      });
+    } else {
+      await prisma.user.update({
+        where: { id: merchant.userId },
+        data: {
+          accountType: "user",
+          verificationStatus: status === "PENDING" ? "pending" : "unverified"
+        }
+      });
+    }
+
     // If suspended, we might want to deactivate their ads
     if (status === "SUSPENDED") {
       await prisma.p2PAd.updateMany({
