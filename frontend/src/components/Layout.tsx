@@ -2,32 +2,11 @@ import React, { useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Navbar } from './Navbar.tsx';
 import { useAuthStore } from '../store/authStore.ts';
-import { useNotificationStore } from '../store/notificationStore.ts';
 
 export const Layout = () => {
-  const { user, isAuthenticated, isLoading, checkAuth } = useAuthStore();
-  const initSocket = useNotificationStore((state) => state.init);
-  const disconnectSocket = useNotificationStore((state) => state.disconnect);
+  const { isAuthenticated, isLoading } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
-
-  useEffect(() => {
-    // Only check auth if we haven't already
-    if (!isAuthenticated && isLoading) {
-      checkAuth();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated && user?.id) {
-      initSocket(user.id);
-    } else {
-      disconnectSocket();
-    }
-    return () => {
-      disconnectSocket();
-    };
-  }, [isAuthenticated, user?.id, initSocket, disconnectSocket]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated && location.pathname !== '/login') {

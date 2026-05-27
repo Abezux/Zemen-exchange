@@ -87,8 +87,17 @@ async function startServer() {
     
     // Import runExpiryCheck dynamically to avoid circular references and launch timer
     import("./backend/routes/p2p.ts").then(({ runExpiryCheck }) => {
-      console.log("[P2P Server Initializer] Starting auto-expiry monitor (Interval: 15s)");
-      setInterval(runExpiryCheck, 15000);
+      const globalForExpiryTimer = globalThis as unknown as {
+        expiryTimerRegistered: boolean | undefined;
+      };
+
+      if (!globalForExpiryTimer.expiryTimerRegistered) {
+        globalForExpiryTimer.expiryTimerRegistered = true;
+        console.log("[P2P Server Initializer] Starting auto-expiry monitor (Interval: 15s)");
+        setInterval(runExpiryCheck, 15000);
+      } else {
+        console.log("[P2P Server Initializer] Auto-expiry monitor already active. Skipping duplicate setInterval registration.");
+      }
     }).catch(err => {
       console.error("[P2P Server Initializer] Failed to initialize P2P monitor:", err);
     });

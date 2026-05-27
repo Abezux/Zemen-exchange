@@ -15,6 +15,7 @@ export interface Notification {
 interface NotificationState {
   notifications: Notification[];
   socket: Socket | null;
+  activeUserId: string | null;
   unreadCount: number;
   soundEnabled: boolean;
   toastNotification: Notification | null;
@@ -93,6 +94,7 @@ function playAudioAlert(type: string) {
 export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   socket: null,
+  activeUserId: null,
   unreadCount: 0,
   soundEnabled: localStorage.getItem("sound_notifications") !== "false",
   toastNotification: null,
@@ -100,10 +102,21 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   pushPermissionStatus: (Notification as any)?.permission || "default",
 
   init: (userId) => {
+    if (!userId) {
+      get().disconnect();
+      return;
+    }
+
+    // Prevent duplicate connection if already initialized with the same user ID
+    if (get().socket && get().activeUserId === userId) {
+      console.log(`[Socket Client] Already connected for user ${userId}. Skipping duplicate init.`);
+      return;
+    }
+
     // Disconnect old socket if it exists to prevent leaks
     get().disconnect();
 
-    if (!userId) return;
+    set({ activeUserId: userId });
 
     // Fetch initial notification list
     get().fetchNotifications();
@@ -235,6 +248,12 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   disconnect: () => {
     get().socket?.disconnect();
-    set({ socket: null });
+    set({ 
+      socket: null, 
+      activeUserId: null,
+      notifications: [],
+      unreadCount: 0,
+      toastNotification: null
+    });
   }
 }));
