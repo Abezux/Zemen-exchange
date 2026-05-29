@@ -28,6 +28,7 @@ async function startServer() {
     "http://localhost:3000",
     "http://localhost:5173",
     "https://zemenexchange.vercel.app",
+    "https://www.zemenex.app",
     "https://zemen-exchange.onrender.com"
   ].filter(origin => Boolean(origin)) as string[];
 
