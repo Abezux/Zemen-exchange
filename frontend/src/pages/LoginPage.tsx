@@ -144,25 +144,25 @@ export const LoginPage = () => {
   const tutorialTabs = [
     {
       title: 'How P2P Works',
-      videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ', // Placeholder valid video layout
+      videoUrl: 'https://www.youtube.com/embed/', // Placeholder valid video layout
       desc: 'Discover Zemenex\'s multi-sig escrow system which safely locks exchange assets until both parties have settled locally.',
       benefits: ['100% Secure custody', 'Automatic release triggers', 'Rapid arbiter desk ready to support anytime']
     },
     {
       title: 'Buying USDT',
-      videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+      videoUrl: 'https://www.youtube.com/embed/',
       desc: 'Learn how to easily submit buy requests, check rates, and complete mobile or bank payouts within seconds to local sellers.',
       benefits: ['Pay with Telebirr or CBE', 'No crypto deposit fee', 'Safe receipt confirmation steps']
     },
     {
       title: 'Selling USDT',
-      videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+      videoUrl: 'https://www.youtube.com/embed/',
       desc: 'Monetize digital assets easily. Post or select merchant offers, verify incoming ETB transfers directly, and execute seamless cash outs.',
       benefits: ['Instant feedback dashboard', 'Locked escrow safeguards', 'Multi-bank compatibility']
     },
     {
       title: 'Safe Trading Guidelines',
-      videoUrl: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
+      videoUrl: 'https://www.youtube.com/embed/',
       desc: 'Expert guide to secure peer-to-peer execution. Minimize dispute risks, spot fraud traces, and authenticate counterparty tags.',
       benefits: ['Verify payment receipt first', 'Never release outside systems', 'Always secure chat proofs']
     }
