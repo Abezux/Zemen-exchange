@@ -100,20 +100,30 @@ export const LoginPage = () => {
   };
 
   const scrollToSection = (id: string) => {
-    const el = document.getElementById(id);
-    if (el) {
-      const offset = 80; // height of floating navbar
-      const bodyRect = document.body.getBoundingClientRect().top;
-      const elementRect = el.getBoundingClientRect().top;
-      const elementPosition = elementRect - bodyRect;
-      const offsetPosition = elementPosition - offset;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
-    }
+    const isMobile = isMobileMenuOpen;
     setIsMobileMenuOpen(false);
+
+    const performScroll = () => {
+      const el = document.getElementById(id);
+      if (el) {
+        const offset = 96; // height of floating navbar + safe padding
+        const elementPosition = el.getBoundingClientRect().top + window.scrollY;
+        const offsetPosition = elementPosition - offset;
+
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth'
+        });
+      }
+    };
+
+    if (isMobile) {
+      // Use a short delay on mobile/touch interfaces to let state changes commit 
+      // and prevent the browser from interrupting smooth scroll animations.
+      setTimeout(performScroll, 80);
+    } else {
+      performScroll();
+    }
   };
 
   // Mock Market Prices & Active Merchants data
@@ -255,12 +265,17 @@ export const LoginPage = () => {
       {/* HERO SECTION */}
       <section className="pt-32 pb-24 md:pt-40 md:pb-32 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
         {/* Left Intro Text Column */}
-        <div className="lg:col-span-7 space-y-8 text-center lg:text-left">
+        <motion.div 
+          initial={{ opacity: 0, x: -35, filter: "blur(6px)" }}
+          animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="lg:col-span-7 space-y-8 text-center lg:text-left"
+        >
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-orange-600/10 border border-orange-500/20 text-orange-400 text-xs font-black uppercase tracking-wider italic">
             <Sparkles className="w-3.5 h-3.5" /> V 1.2
           </div>
 
-          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white leading-[1.05] tracking-tight uppercase italic">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white leading-[1.05] tracking-tight uppercase italic lg:max-w-xl">
             Trade ETB/USDT<br />
             <span className="bg-gradient-to-r from-orange-500 via-orange-450 to-[#fdba74] bg-clip-text text-transparent">
               Securely
@@ -274,13 +289,13 @@ export const LoginPage = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
             <button 
               onClick={() => setIsLoginModalOpen(true)}
-              className="px-8 py-4 rounded-2xl bg-orange-600 text-white font-black hover:bg-orange-500 transition-all flex items-center justify-center gap-3 shadow-xl shadow-orange-600/20 uppercase italic text-sm md:text-base"
+              className="px-8 py-4 rounded-2xl bg-orange-600 text-white font-black hover:bg-orange-500 hover:shadow-orange-500/10 hover:scale-[1.02] transform-gpu transition-all flex items-center justify-center gap-3 shadow-xl shadow-orange-600/20 uppercase italic text-sm md:text-base cursor-pointer"
             >
-              Start Trading Now <ArrowRight className="w-5 h-5" />
+              Start Trading Now <ArrowRight className="w-5 h-5 animate-pulse" />
             </button>
             <button 
               onClick={() => scrollToSection('how-it-works')}
-              className="px-8 py-4 rounded-2xl border border-zinc-800 text-white font-semibold hover:bg-zinc-900 transition-all uppercase italic text-sm md:text-base flex items-center justify-center gap-2"
+              className="px-8 py-4 rounded-2xl border border-zinc-800 text-white font-semibold hover:bg-zinc-900/60 hover:border-zinc-705 transition-all uppercase italic text-sm md:text-base flex items-center justify-center gap-2 cursor-pointer"
             >
               How It Works
             </button>
@@ -301,14 +316,23 @@ export const LoginPage = () => {
               <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-extrabold italic">Avg. Release Speed</div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Right Visual Interactive Component Column */}
-        <div className="lg:col-span-5 relative">
+        <motion.div 
+          initial={{ opacity: 0, y: 35, scale: 0.96, filter: "blur(6px)" }}
+          animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+          transition={{ duration: 0.9, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+          className="lg:col-span-5 relative"
+        >
           <div className="absolute inset-0 bg-orange-600/10 rounded-[3rem] blur-2xl pointer-events-none -rotate-12 scale-95"></div>
           
           {/* Glass dashboard mockup */}
-          <div className="relative bg-zinc-900/45 p-6 sm:p-8 rounded-[2.5rem] border border-zinc-850/80 backdrop-blur-md shadow-2xl">
+          <motion.div 
+            animate={{ y: [0, -8, 0] }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+            className="relative bg-zinc-900/45 p-6 sm:p-8 rounded-[2.5rem] border border-zinc-850/80 backdrop-blur-md shadow-2xl hover:border-orange-500/25 transition-colors group"
+          >
             {/* Window controls */}
             <div className="flex justify-between items-center mb-6">
               <div className="flex gap-1.5">
@@ -323,7 +347,7 @@ export const LoginPage = () => {
 
             {/* Glowing active swap simulation grid card */}
             <div className="space-y-4">
-              <div className="bg-black/60 border border-zinc-850 p-4 rounded-2xl relative overflow-hidden">
+              <div className="bg-black/60 border border-zinc-850 p-4 rounded-2xl relative overflow-hidden transition-all group-hover:border-zinc-800">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[10px] text-zinc-500 uppercase font-black italic">Pay fiat amount</span>
                   <span className="text-xs text-orange-400 font-bold">Telebirr Wallet</span>
@@ -336,12 +360,12 @@ export const LoginPage = () => {
 
               {/* Centered Swap Circle Icon */}
               <div className="flex justify-center -my-1">
-                <div className="bg-orange-600 p-2.5 rounded-xl border-4 border-zinc-900 relative z-10 shadow-lg">
+                <div className="bg-orange-600 p-2.5 rounded-xl border-4 border-zinc-900 relative z-10 shadow-lg group-hover:scale-105 transition-transform duration-300">
                   <ArrowRightLeft className="w-4 h-4 text-white rotate-90" />
                 </div>
               </div>
 
-              <div className="bg-black/60 border border-zinc-850 p-4 rounded-2xl/2 relative overflow-hidden">
+              <div className="bg-black/60 border border-zinc-850 p-4 rounded-2xl relative overflow-hidden transition-all group-hover:border-zinc-800">
                 <div className="flex justify-between items-center mb-1">
                   <span className="text-[10px] text-zinc-500 uppercase font-black italic">Receive digital asset</span>
                   <span className="text-xs text-emerald-400 font-bold">Locked in Escrow</span>
@@ -360,10 +384,10 @@ export const LoginPage = () => {
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 rounded-full bg-orange-600/20 border border-orange-500 flex items-center justify-center text-[10px] text-orange-400 font-bold">2</div>
-                  <span className="text-xs text-zinc-300 font-bold">Zemenex locks seller\'s USDT escrow</span>
+                  <span className="text-xs text-zinc-300 font-bold">Zemenex locks seller's USDT escrow</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 rounded-full border border-zinc-800 flex items-center justify-center text-[10px] text-zinc-600 font-bold animate-pulse">3</div>
+                  <div className="w-5 h-5 rounded-full border border-zinc-800 flex items-center justify-center text-[10px] text-zinc-650 font-bold animate-pulse">3</div>
                   <span className="text-xs text-zinc-500 font-medium">Buyer sends local ETB transfer</span>
                 </div>
               </div>
@@ -371,17 +395,23 @@ export const LoginPage = () => {
               {/* CTA trade portal */}
               <button 
                 onClick={() => setIsLoginModalOpen(true)}
-                className="w-full py-4 rounded-xl bg-orange-600 font-black text-white hover:bg-orange-500 transition-all text-xs uppercase italic tracking-wide flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-xl bg-orange-600 font-black text-white hover:bg-orange-500 transition-all text-xs uppercase italic tracking-wide flex items-center justify-center gap-2 cursor-pointer shadow-md"
               >
                 Create Wallet & Continue <ArrowRight className="w-4 h-4" />
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* SUPPORTED LOCAL PAYMENT METHODS */}
-      <section className="bg-zinc-950/40 border-y border-zinc-900/50 py-12 overflow-hidden relative">
+      <motion.section 
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.9 }}
+        className="bg-zinc-950/40 border-y border-zinc-900/50 py-12 overflow-hidden relative"
+      >
         <div className="max-w-7xl mx-auto px-4 mb-6">
           <p className="text-center text-[10px] text-zinc-500 font-black uppercase tracking-widest italic">
             PAYMENT METHODS
@@ -433,10 +463,17 @@ export const LoginPage = () => {
             ))}
           </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* LIVE MARKET PREVIEW */}
-      <section id="preview" className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <motion.section 
+        id="preview" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+      >
         <div className="text-center space-y-4 mb-16">
           <div className="text-xs text-orange-500 font-black uppercase tracking-wider italic">
             LIVE ORDERBOOK 
@@ -535,10 +572,17 @@ export const LoginPage = () => {
             </div>
           ))}
         </div>
-      </section>
+      </motion.section>
 
       {/* HOW P2P WORKS TUTORIAL */}
-      <section id="how-it-works" className="py-24 bg-zinc-950/20 border-t border-zinc-900 px-4 sm:px-6 lg:px-8">
+      <motion.section 
+        id="how-it-works" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="py-24 bg-zinc-950/20 border-t border-zinc-900 px-4 sm:px-6 lg:px-8"
+      >
         <div className="max-w-7xl mx-auto">
           <div className="text-center space-y-4 mb-20">
             <span className="text-xs text-orange-500 font-black uppercase tracking-wider italic">AUTOMATED TRADING</span>
@@ -574,23 +618,37 @@ export const LoginPage = () => {
                 desc: 'As soon as the merchant verifies receipt of the ETB, the locked USDT digital assets are released directly inside your Zemenex wallet.' 
               }
             ].map((s, idx) => (
-              <div key={idx} className="bg-zinc-905/30 border border-zinc-900 p-6 rounded-3xl relative z-10 flex flex-col justify-between min-h-[250px] group hover:border-orange-500/30 transition-all">
+              <motion.div 
+                key={idx} 
+                initial={{ opacity: 0, y: 25 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.6, delay: idx * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                className="bg-zinc-905/30 border border-zinc-900 p-6 rounded-3xl relative z-10 flex flex-col justify-between min-h-[250px] group hover:border-orange-500/30 transition-all hover:-translate-y-1 transform-gpu cursor-default"
+              >
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-3xl font-black text-orange-500 italic font-mono">{s.step}</span>
-                    <span className="w-2.5 h-2.5 rounded-full bg-orange-600 shadow-md shadow-orange-500 animate-pulse"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-600 shadow-md shadow-orange-500/40 group-hover:scale-125 transition-transform animate-pulse"></span>
                   </div>
-                  <h3 className="font-extrabold text-white uppercase text-sm tracking-tight italic">{s.title}</h3>
-                  <p className="text-zinc-500 text-xs font-semibold leading-relaxed">{s.desc}</p>
+                  <h3 className="font-extrabold text-white uppercase text-sm tracking-tight italic transition-colors group-hover:text-orange-500">{s.title}</h3>
+                  <p className="text-zinc-500 text-xs font-semibold leading-relaxed transition-colors group-hover:text-zinc-400">{s.desc}</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* TUTORIAL / VIDEOS LEARNING RETREAT */}
-      <section id="learn" className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <motion.section 
+        id="learn" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"
+      >
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
           {/* Left information Column */}
@@ -606,19 +664,21 @@ export const LoginPage = () => {
             {/* Selector list */}
             <div className="space-y-2.5 pt-4">
               {tutorialTabs.map((t, idx) => (
-                <button
+                <motion.button
                   key={idx}
+                  whileHover={{ scale: 1.01, x: 2 }}
+                  whileTap={{ scale: 0.99 }}
                   onClick={() => {
                     setActiveLearnTab(idx);
                     setIsLearnPlayerActive(false);
                   }}
-                  className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${activeLearnTab === idx ? 'bg-orange-600/15 border-orange-500/30 text-white' : 'bg-transparent border-zinc-900 text-zinc-500 hover:border-zinc-800'}`}
+                  className={`w-full p-4 rounded-2xl border text-left flex items-center justify-between transition-all cursor-pointer ${activeLearnTab === idx ? 'bg-orange-600/15 border-orange-500/30 text-white' : 'bg-transparent border-zinc-900 text-zinc-500 hover:border-zinc-800'}`}
                 >
                   <span className="font-bold text-xs uppercase tracking-wide italic">{idx + 1}. {t.title}</span>
                   <div className={`p-1 rounded-md ${activeLearnTab === idx ? 'bg-orange-600 text-white' : 'bg-zinc-900 text-zinc-500'}`}>
-                    <Play className="w-3.5 h-3.5 shrink-0" />
+                    <Play className={`w-3.5 h-3.5 shrink-0 ${activeLearnTab === idx ? 'fill-white' : ''}`} />
                   </div>
-                </button>
+                </motion.button>
               ))}
             </div>
           </div>
@@ -634,7 +694,7 @@ export const LoginPage = () => {
               </div>
 
               {/* Player Area */}
-              <div className="aspect-video bg-black rounded-2xl border border-zinc-850 relative overflow-hidden flex items-center justify-center">
+              <div className="aspect-video bg-black rounded-2xl border border-zinc-850 relative overflow-hidden flex items-center justify-center animate-glow">
                 {isLearnPlayerActive ? (
                   <iframe 
                     width="100%" 
@@ -666,7 +726,7 @@ export const LoginPage = () => {
                     {/* Centered Play overlay button */}
                     <button 
                       onClick={() => setIsLearnPlayerActive(true)}
-                      className="w-20 h-20 rounded-full bg-orange-600 text-white flex items-center justify-center shadow-2xl hover:bg-orange-500 hover:scale-105 transition-all z-20 group"
+                      className="w-20 h-20 rounded-full bg-orange-600 text-white flex items-center justify-center shadow-2xl hover:bg-orange-500 hover:scale-105 transition-all z-20 group cursor-pointer"
                     >
                       <Play className="w-7 h-7 text-white ml-1 fill-white group-hover:scale-110 transition-transform" />
                     </button>
@@ -680,10 +740,17 @@ export const LoginPage = () => {
           </div>
 
         </div>
-      </section>
+      </motion.section>
 
       {/* SECURITY / TRUST SECTION */}
-      <section id="trust" className="py-24 bg-zinc-950/40 border-t border-zinc-900 px-4 sm:px-6 lg:px-8">
+      <motion.section 
+        id="trust" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="py-24 bg-zinc-950/40 border-t border-zinc-900 px-4 sm:px-6 lg:px-8"
+      >
         <div className="max-w-7xl mx-auto">
           <div className="text-center space-y-4 mb-20">
             <span className="text-xs text-orange-500 font-black uppercase tracking-wider italic">Trade with Trust</span>
@@ -694,51 +761,75 @@ export const LoginPage = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="bg-zinc-900/20 border border-zinc-900 hover:border-orange-500/30 p-8 rounded-[2rem] transition-all space-y-6 flex flex-col justify-between">
+            <motion.div 
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-zinc-900/20 border border-zinc-900 hover:border-orange-500/30 p-8 rounded-[2rem] transition-all space-y-6 flex flex-col justify-between hover:shadow-2xl hover:-translate-y-1 transform-gpu cursor-default group"
+            >
               <div className="space-y-4">
-                <div className="bg-orange-600/10 p-4 rounded-2xl border border-orange-500/20 w-max text-orange-400">
+                <div className="bg-orange-600/10 p-4 rounded-2xl border border-orange-500/20 w-max text-orange-400 group-hover:scale-105 transition-transform duration-300">
                   <Shield className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-white uppercase italic tracking-wide">Escrow custody</h3>
+                <h3 className="text-xl font-bold text-white uppercase italic tracking-wide group-hover:text-orange-500 transition-colors">Escrow custody</h3>
                 <p className="text-zinc-500 text-xs sm:text-sm font-semibold leading-relaxed">
                   Every user trading asset is programmatically isolated inside our custody ledger, locking liquidity securely before communication or fiat transfers launch.
                 </p>
               </div>
               <span className="text-[10px] text-orange-500 font-black uppercase italic tracking-wider">CRYPTOGRAPHIC GUARANTEE</span>
-            </div>
+            </motion.div>
 
-            <div className="bg-zinc-900/20 border border-zinc-900 hover:border-orange-500/30 p-8 rounded-[2rem] transition-all space-y-6 flex flex-col justify-between">
+            <motion.div 
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-zinc-900/20 border border-zinc-900 hover:border-orange-500/30 p-8 rounded-[2rem] transition-all space-y-6 flex flex-col justify-between hover:shadow-2xl hover:-translate-y-1 transform-gpu cursor-default group"
+            >
               <div className="space-y-4">
-                <div className="bg-orange-600/10 p-4 rounded-2xl border border-orange-500/20 w-max text-orange-400">
+                <div className="bg-orange-600/10 p-4 rounded-2xl border border-orange-500/20 w-max text-orange-400 group-hover:scale-105 transition-transform duration-300">
                   <Users className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-white uppercase italic tracking-wide">Verified Merchants</h3>
+                <h3 className="text-xl font-bold text-white uppercase italic tracking-wide group-hover:text-orange-500 transition-colors">Verified Merchants</h3>
                 <p className="text-zinc-500 text-xs sm:text-sm font-semibold leading-relaxed">
                   Merchants undergo thorough bank authorization audits and address reviews. No anonymous accounts are ever permitted to trade in bulk inside Zemenex.
                 </p>
               </div>
               <span className="text-[10px] text-orange-500 font-black uppercase italic tracking-wider">RIGID AUTHENTICATION</span>
-            </div>
+            </motion.div>
 
-            <div className="bg-zinc-900/20 border border-zinc-900 hover:border-orange-500/30 p-8 rounded-[2rem] transition-all space-y-6 flex flex-col justify-between">
+            <motion.div 
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-zinc-900/20 border border-zinc-900 hover:border-orange-500/30 p-8 rounded-[2rem] transition-all space-y-6 flex flex-col justify-between hover:shadow-2xl hover:-translate-y-1 transform-gpu cursor-default group"
+            >
               <div className="space-y-4">
-                <div className="bg-orange-600/10 p-4 rounded-2xl border border-orange-500/20 w-max text-orange-400">
+                <div className="bg-orange-600/10 p-4 rounded-2xl border border-orange-500/20 w-max text-orange-400 group-hover:scale-105 transition-transform duration-300">
                   <Award className="w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-white uppercase italic tracking-wide">24/7 desk support</h3>
+                <h3 className="text-xl font-bold text-white uppercase italic tracking-wide group-hover:text-orange-500 transition-colors">24/7 desk support</h3>
                 <p className="text-zinc-500 text-xs sm:text-sm font-semibold leading-relaxed">
                   We maintain a highly responsive operator dashboard. In any dispute scenario, administrators check transaction details and release locked funds fairly.
                 </p>
               </div>
               <span className="text-[10px] text-orange-500 font-black uppercase italic tracking-wider">DISPUTE SETTLEMENT TIMELINE</span>
-            </div>
+            </motion.div>
           </div>
         </div>
-      </section>
+      </motion.section>
 
 
       {/* MOBILE EXPERIENCE PROMOTION */}
-      <section className="py-24 bg-zinc-950/20 border-t border-zinc-900/60 overflow-hidden relative">
+      <motion.section 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="py-24 bg-zinc-950/20 border-t border-zinc-900/60 overflow-hidden relative"
+      >
         <div className="absolute top-1/2 left-1/2 w-[600px] h-[600px] bg-orange-600/5 rounded-full blur-[200px] -translate-x-1/2 -translate-y-1/2 pointer-events-none"></div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
@@ -772,10 +863,20 @@ export const LoginPage = () => {
           </div>
 
           {/* Isometric Mobile Screenshot Mock */}
-          <div className="lg:col-span-5 flex justify-center relative">
-            <div className="absolute inset-0 bg-orange-600/10 blur-2xl rounded-full scale-95 pointer-events-none"></div>
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.92, rotate: 2 }}
+            whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="lg:col-span-5 flex justify-center relative"
+          >
+            <div className="absolute inset-0 bg-orange-600/10 blur-2xl rounded-full scale-95 pointer-events-none animate-pulse"></div>
             
-            <div className="relative w-64 sm:w-72 aspect-[9/19.5] bg-black rounded-[3rem] border-[8px] border-zinc-850 p-3 shadow-2xl relative overflow-hidden flex flex-col justify-between">
+            <motion.div 
+              animate={{ y: [0, -10, 0] }}
+              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+              className="relative w-64 sm:w-72 aspect-[9/19.5] bg-black rounded-[3rem] border-[8px] border-zinc-850 p-3 shadow-2xl overflow-hidden flex flex-col justify-between hover:border-orange-500/20 transition-colors"
+            >
               {/* Phone ear piece */}
               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-zinc-850 rounded-b-2xl z-20 flex items-center justify-center">
                 <div className="w-10 h-1 bg-zinc-650 rounded-full mb-1"></div>
@@ -786,7 +887,7 @@ export const LoginPage = () => {
                 <div className="space-y-3">
                   <div className="flex justify-between items-center px-1">
                     <span className="text-[10px] font-black text-white italic uppercase tracking-wider">ZEMENEX APP</span>
-                    <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></span>
                   </div>
 
                   {/* Mock Wallet Balance widget */}
@@ -804,7 +905,7 @@ export const LoginPage = () => {
                     </div>
                     {/* Linear slider timeline */}
                     <div className="w-full h-1 bg-zinc-800 rounded-full relative overflow-hidden">
-                      <div className="w-2/3 h-full bg-orange-500 rounded-full animate-pulse"></div>
+                      <div className="w-2/3 h-full bg-orange-500 rounded-full"></div>
                     </div>
                   </div>
                 </div>
@@ -815,14 +916,21 @@ export const LoginPage = () => {
                   </span>
                 </div>
               </div>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
         </div>
-      </section>
+      </motion.section>
 
       {/* FAQ SECTION */}
-      <section id="faqs" className="py-24 max-w-4xl mx-auto px-4 sm:px-6">
+      <motion.section 
+        id="faqs" 
+        initial={{ opacity: 0, y: 30 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: "-100px" }}
+        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        className="py-24 max-w-4xl mx-auto px-4 sm:px-6"
+      >
         <div className="text-center space-y-4 mb-16">
           <span className="text-xs text-orange-500 font-black uppercase tracking-wider italic">HAVE QUESTIONS ON ESCROW?</span>
           <h2 className="text-3xl sm:text-4xl font-black text-white uppercase italic">Frequently Asked Questions</h2>
@@ -885,7 +993,7 @@ export const LoginPage = () => {
             </div>
           ))}
         </div>
-      </section>
+      </motion.section>
 
       {/* FOOTER SECTION */}
       <footer className="bg-zinc-950 border-t border-zinc-90 w-full pt-20 pb-12 px-4 sm:px-6 lg:px-8 mt-12 relative overflow-hidden">
@@ -939,7 +1047,7 @@ export const LoginPage = () => {
 
             <div className="space-y-4">
               <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest italic block">Platform Links</span>
-              <ul className="text-xs space-y-2.5 font-bold text-zinc-455">
+              <ul className="text-xs space-y-2.5 font-bold text-zinc-400">
                 <li><button onClick={() => scrollToSection('home')} className="hover:text-white transition-colors text-zinc-400">Home Interface</button></li>
                 <li><button onClick={() => scrollToSection('preview')} className="hover:text-white transition-colors text-zinc-400">P2P Live Tickers</button></li>
                 <li><button onClick={() => scrollToSection('how-it-works')} className="hover:text-white transition-colors text-zinc-400">Escrow Guidelines</button></li>
@@ -952,7 +1060,7 @@ export const LoginPage = () => {
               <ul className="text-xs space-y-2.5 font-bold">
                 <li><button onClick={() => scrollToSection('faqs')} className="hover:text-white transition-colors text-zinc-400">Platform FAQ Hub</button></li>
                 <li><span className="text-zinc-400 font-bold block">24/7 Arbitrage Active</span></li>
-                <li><a href="https://t.me/Zemen_P2P_Support" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors text-orange-500 flex items-center justify-center md:justify-start gap-1">Telegram Support Chanel <ExternalLink className="w-3 h-3" /></a></li>
+                <li><a href="https://t.me/Zemen_P2P_Support" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors text-orange-500 flex items-center justify-center md:justify-start gap-1"><ExternalLink className="w-3 h-3" /></a></li>
               </ul>
             </div>
 
