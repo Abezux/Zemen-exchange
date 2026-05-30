@@ -425,7 +425,7 @@ export const MaintenancePage = () => {
             </motion.div>
           </div>
         </section>
-
+                 
         {/*Upgrade Progress Section
         <section className="py-20 md:py-32 px-4 md:px-8 relative">
           <div className="max-w-6xl mx-auto">
@@ -517,7 +517,7 @@ export const MaintenancePage = () => {
           </div>
         </section>
 */}
-        {/* System Status Section */}
+        {/* System Status Section 
         <section className="py-20 md:py-32 px-4 md:px-8 relative">
           <div className="max-w-2xl mx-auto">
             <motion.div
@@ -530,8 +530,8 @@ export const MaintenancePage = () => {
                 border: '1px solid var(--glass-border)',
                 padding: '3rem',
               }}
-            >
-              {/* Glow background */}
+            >*/}
+              {/* Glow background 
               <div
                 className="absolute top-0 right-0 w-64 h-64 rounded-full blur-3xl transition-colors duration-300"
                 style={{
@@ -597,8 +597,8 @@ export const MaintenancePage = () => {
             </motion.div>
           </div>
         </section>
-
-        {/* Security Assurance Section */}
+                */}
+        {/* Security Assurance Section 
         <section className="py-20 md:py-32 px-4 md:px-8 relative">
           <div className="max-w-4xl mx-auto">
             <motion.div
@@ -679,9 +679,9 @@ export const MaintenancePage = () => {
               })}
             </div>
           </div>
-        </section>
+        </section>*/}
 
-        {/* Newsletter Section */}
+        {/* Newsletter Section 
         <section className="py-20 md:py-32 px-4 md:px-8 relative">
           <div className="max-w-2xl mx-auto">
             <motion.div
@@ -719,8 +719,8 @@ export const MaintenancePage = () => {
             </motion.div>
           </div>
         </section>
-
-        {/* Footer */}
+          */}
+        {/* Footer 
         <footer className="py-16 px-4 md:px-8 relative transition-all duration-300" style={{ borderTop: '1px solid var(--border-light)' }}>
           <div className="max-w-6xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
@@ -789,7 +789,7 @@ export const MaintenancePage = () => {
               <p>© 2024 Zemenex. Building the future of peer-to-peer trading.</p>
             </div>
           </div>
-        </footer>
+        </footer>*/}
       </div>
     </div>
   );
