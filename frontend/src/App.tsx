@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout.tsx';
+import { MaintenancePage } from './components/MaintenancePage.tsx';
 import { Dashboard } from './pages/Dashboard.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { DepositPage } from './pages/DepositPage.tsx';
@@ -29,6 +30,7 @@ const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: 
 };
 
 export default function App() {
+  const maintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true';
   const { user, isAuthenticated, checkAuth } = useAuthStore();
   const initSocket = useNotificationStore((state) => state.init);
   const disconnectSocket = useNotificationStore((state) => state.disconnect);
@@ -45,11 +47,15 @@ export default function App() {
     }
   }, [isAuthenticated, user?.id, initSocket, disconnectSocket]);
 
+  if (maintenanceMode) {
+    return <MaintenancePage />;
+  }
+
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        
+
         <Route element={<Layout />}>
           <Route path="/" element={
             <ProtectedRoute>

@@ -12,6 +12,7 @@ export default defineConfig(({mode}) => {
     },
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+      'import.meta.env.VITE_MAINTENANCE_MODE': JSON.stringify(env.VITE_MAINTENANCE_MODE || 'false'),
     },
     resolve: {
       alias: {
